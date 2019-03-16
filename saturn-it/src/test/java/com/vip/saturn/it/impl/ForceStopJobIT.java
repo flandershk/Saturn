@@ -3,26 +3,23 @@
  */
 package com.vip.saturn.it.impl;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
+import com.vip.saturn.it.base.AbstractSaturnIT;
+import com.vip.saturn.it.base.FinishCheck;
+import com.vip.saturn.it.job.LongtimeJavaJob;
+import com.vip.saturn.job.console.domain.JobConfig;
+import com.vip.saturn.job.console.domain.JobType;
+import com.vip.saturn.job.internal.execution.ExecutionNode;
+import com.vip.saturn.job.internal.storage.JobNodePath;
+import org.junit.*;
+import org.junit.runners.MethodSorters;
 
 import java.util.Collection;
 
-import org.junit.*;
-
-import com.vip.saturn.it.AbstractSaturnIT;
-import com.vip.saturn.it.JobType;
-import com.vip.saturn.it.job.LongtimeJavaJob;
-import com.vip.saturn.job.internal.config.JobConfiguration;
-import com.vip.saturn.job.internal.execution.ExecutionNode;
-import com.vip.saturn.job.internal.storage.JobNodePath;
-import org.junit.runners.MethodSorters;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.fail;
 
 /**
- * 项目名称：saturn-job-it 创建时间：2016年7月26日 上午11:32:56
  * @author yangjuanying
- * @version 1.0
- * @since JDK 1.7.0_05 文件名称：ForceStopJobIT.java 类说明：
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class ForceStopJobIT extends AbstractSaturnIT {
@@ -35,7 +32,7 @@ public class ForceStopJobIT extends AbstractSaturnIT {
 
 	@AfterClass
 	public static void tearDown() throws Exception {
-		stopExecutorList();
+		stopExecutorListGracefully();
 		stopSaturnConsoleList();
 	}
 
@@ -51,12 +48,11 @@ public class ForceStopJobIT extends AbstractSaturnIT {
 
 	/**
 	 * 作业STOPPING时立即强制终止
-	 * @throws InterruptedException
 	 */
 	@Test
-	public void test_A() throws InterruptedException {
+	public void test_A_forceStopITJob() throws Exception {
 		final int shardCount = 3;
-		final String jobName = "forceStopITJob";
+		final String jobName = "test_A_forceStopITJob";
 
 		for (int i = 0; i < shardCount; i++) {
 			String key = jobName + "_" + i;
@@ -64,37 +60,44 @@ public class ForceStopJobIT extends AbstractSaturnIT {
 			status.runningCount = 0;
 			status.sleepSeconds = 60;
 			status.finished = false;
-			status.killed = false;
+			status.beforeTimeout = false;
 			status.timeout = false;
 			LongtimeJavaJob.statusMap.put(key, status);
 		}
 
-		JobConfiguration jobConfiguration = new JobConfiguration(jobName);
-		jobConfiguration.setCron("0 0 * * * ?");
-		jobConfiguration.setJobType(JobType.JAVA_JOB.toString());
-		jobConfiguration.setJobClass(LongtimeJavaJob.class.getCanonicalName());
-		jobConfiguration.setShardingTotalCount(shardCount);
-		jobConfiguration.setTimeoutSeconds(0);
-		jobConfiguration.setShardingItemParameters("0=0,1=1,2=2");
-		addJob(jobConfiguration);
+		JobConfig jobConfig = new JobConfig();
+		jobConfig.setJobName(jobName);
+		jobConfig.setCron("9 9 9 9 9 ? 2099");
+		jobConfig.setJobType(JobType.JAVA_JOB.toString());
+		jobConfig.setJobClass(LongtimeJavaJob.class.getCanonicalName());
+		jobConfig.setShardingTotalCount(shardCount);
+		jobConfig.setTimeoutSeconds(0);
+		jobConfig.setShardingItemParameters("0=0,1=1,2=2");
+		addJob(jobConfig);
 		Thread.sleep(1000);
-		enableJob(jobConfiguration.getJobName());
+		enableJob(jobName);
 		Thread.sleep(1000);
 		runAtOnce(jobName);
 		Thread.sleep(2000);
-		disableJob(jobConfiguration.getJobName());
+		disableJob(jobName);
 		Thread.sleep(1000);
-		forceStopJob((jobConfiguration.getJobName()));
+		forceStopJob(jobName);
 		Thread.sleep(1000);
 
 		try {
 			waitForFinish(new FinishCheck() {
 
 				@Override
-				public boolean docheck() {
+				public boolean isOk() {
 					Collection<LongtimeJavaJob.JobStatus> values = LongtimeJavaJob.statusMap.values();
 					for (LongtimeJavaJob.JobStatus status : values) {
-						if (!status.finished || !status.killed) {
+						if (!status.interrupted) {
+							return false;
+						}
+						if (status.beforeKilled != 1) {
+							return false;
+						}
+						if (!status.finished || status.killed != 2) {
 							return false;
 						}
 					}
@@ -125,7 +128,7 @@ public class ForceStopJobIT extends AbstractSaturnIT {
 			status.runningCount = 0;
 			status.sleepSeconds = 1;
 			status.finished = false;
-			status.killed = false;
+			status.beforeTimeout = false;
 			status.timeout = false;
 			LongtimeJavaJob.statusMap.put(key, status);
 		}
@@ -134,7 +137,7 @@ public class ForceStopJobIT extends AbstractSaturnIT {
 			waitForFinish(new FinishCheck() {
 
 				@Override
-				public boolean docheck() {
+				public boolean isOk() {
 					for (int i = 0; i < shardCount; i++) {
 						String key = jobName + "_" + i;
 						LongtimeJavaJob.JobStatus status = LongtimeJavaJob.statusMap.get(key);

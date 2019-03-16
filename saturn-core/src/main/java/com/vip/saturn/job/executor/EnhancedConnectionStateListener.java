@@ -1,6 +1,7 @@
 package com.vip.saturn.job.executor;
 
 import com.vip.saturn.job.threads.SaturnThreadFactory;
+import com.vip.saturn.job.utils.LogUtils;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.state.ConnectionState;
 import org.apache.curator.framework.state.ConnectionStateListener;
@@ -10,12 +11,14 @@ import org.slf4j.LoggerFactory;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import static com.vip.saturn.job.utils.LogEvents.ExecutorEvent.COMMON;
+
 /**
  * @author hebelala
  */
 public abstract class EnhancedConnectionStateListener implements ConnectionStateListener {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(EnhancedConnectionStateListener.class);
+	private static final Logger log = LoggerFactory.getLogger(EnhancedConnectionStateListener.class);
 
     private String executorName;
     private volatile boolean connected = false;
@@ -46,7 +49,8 @@ public abstract class EnhancedConnectionStateListener implements ConnectionState
         final String clientStr = client.toString();
         if (ConnectionState.SUSPENDED == newState) {
             connected = false;
-            LOGGER.warn("The executor {} found zk is SUSPENDED, client is {}", executorName, clientStr);
+			LogUtils.warn(log, COMMON,
+					"The executor {} found zk is SUSPENDED, client is {}", executorName, clientStr);
             final long sessionId = getSessionId(client);
             if (!closed) {
                 checkLostThread.submit(new Runnable() {
@@ -56,14 +60,18 @@ public abstract class EnhancedConnectionStateListener implements ConnectionState
                             try {
                                 Thread.sleep(1000L);
                             } catch (InterruptedException e) {
+								LogUtils.debug(log, EnhancedConnectionStateListener.class.getCanonicalName(),
+										"checkLostThread is interrupted");
                             }
                             if (closed) {
                                 break;
                             }
                             long newSessionId = getSessionId(client);
                             if (sessionId != newSessionId) {
-                                LOGGER.warn("The executor {} is going to restart for zk lost, client is {}",
-                                        executorName, clientStr);
+								LogUtils.warn(log, EnhancedConnectionStateListener.class.getCanonicalName(),
+										"The executor {} is going to restart for zk lost, client is {}", executorName,
+										clientStr);
+
                                 onLost();
                                 break;
                             }
@@ -72,7 +80,8 @@ public abstract class EnhancedConnectionStateListener implements ConnectionState
                 });
             }
         } else if (ConnectionState.RECONNECTED == newState) {
-            LOGGER.warn("The executor {} found zk is RECONNECTED, client is {}", executorName, clientStr);
+			LogUtils.warn(log, COMMON,
+					"The executor {} found zk is RECONNECTED, client is {}", executorName, clientStr);
             connected = true;
         }
     }

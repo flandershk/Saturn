@@ -203,10 +203,10 @@ CREATE TABLE `release_version_info` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uniq_rvi_version_number` (`version_number`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8 COMMENT='Saturn发布版本信息表';
- 
+
 
 CREATE TABLE `namespace_version_mapping` (
-  `id` bigint(11) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `id` bigint(11) unsigned NOT NULL AUTO_INCREMENT COMMENT '主 键',
   `namespace` varchar(255) NOT NULL DEFAULT '' COMMENT '域名',
   `version_number` varchar(255) NOT NULL DEFAULT '' COMMENT '版本号',
   `is_forced` tinyint(1) DEFAULT '0' COMMENT '当前版本已经不低于该版本时，是否强制使用该配置版本：0，不强制；1，强制',
@@ -228,3 +228,240 @@ CREATE TABLE `temporary_shared_status` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uniq_tss_status_key` (`status_key`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8 COMMENT='共享状态表';
+
+DROP TABLE IF EXISTS `user`;
+CREATE TABLE `user` (
+  `id` BIGINT(11) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `user_name` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '用户名',
+  `password` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '用户密码',
+  `real_name` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '用户真实名字',
+  `employee_id` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '工号',
+  `email` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '邮箱',
+  `created_by` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '创建人',
+  `create_time` TIMESTAMP NOT NULL DEFAULT '1980-01-01 00:00:00' COMMENT '创建时间',
+  `last_updated_by` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '最近一次的更新人',
+  `last_update_time` TIMESTAMP NOT NULL DEFAULT '1980-01-01 00:00:00' ON UPDATE CURRENT_TIMESTAMP COMMENT '最近一次的更新时间',
+  `is_deleted` TINYINT(4) NOT NULL DEFAULT '0' COMMENT '是否删除：0，未删除；1，删除',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_user_user_name` (`user_name`),
+  KEY `idx_user_is_deleted` (`is_deleted`)
+  )ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8 COMMENT='用户表';
+
+DROP TABLE IF EXISTS `role`;
+CREATE TABLE `role` (
+  `id` BIGINT(11) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `role_key` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '角色标识',
+  `role_name` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '角色名',
+  `description` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '角色描述',
+  `created_by` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '创建人',
+  `create_time` TIMESTAMP NOT NULL DEFAULT '1980-01-01 00:00:00' COMMENT '创建时间',
+  `last_updated_by` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '最近一次的更新人',
+  `last_update_time` TIMESTAMP NOT NULL DEFAULT '1980-01-01 00:00:00' ON UPDATE CURRENT_TIMESTAMP COMMENT '最近一次的更新时间',
+  `is_deleted` TINYINT(4) NOT NULL DEFAULT '0' COMMENT '是否删除：0，未删除；1，删除',
+PRIMARY KEY (`id`),
+UNIQUE KEY `uniq_role_role_key` (`role_key`),
+KEY `idx_role_is_deleted` (`is_deleted`)
+)ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8 COMMENT='角色表';
+
+DROP TABLE IF EXISTS `permission`;
+CREATE TABLE `permission` (
+  `id` BIGINT(11) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `permission_key` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '权限标识',
+  `permission_name` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '权限名',
+  `description` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '权限描述',
+  `created_by` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '创建人',
+  `create_time` TIMESTAMP NOT NULL DEFAULT '1980-01-01 00:00:00' COMMENT '创建时间',
+  `last_updated_by` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '最近一次的更新人',
+  `last_update_time` TIMESTAMP NOT NULL DEFAULT '1980-01-01 00:00:00' ON UPDATE CURRENT_TIMESTAMP COMMENT '最近一次的更新时间',
+  `is_deleted` TINYINT(4) NOT NULL DEFAULT '0' COMMENT '是否删除：0，未删除；1，删除',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_permission_permission_key` (`permission_key`),
+  KEY `idx_permission_is_deleted` (`is_deleted`)
+  )ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8 COMMENT='权限表';
+
+DROP TABLE IF EXISTS `user_role`;
+CREATE TABLE `user_role` (
+  `id` BIGINT(11) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `user_name` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '用户名',
+  `role_key` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '角色标识',
+  `namespace` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '域名',
+  `need_approval` TINYINT(4) NOT NULL DEFAULT '1' COMMENT '是否需要审批：0，不需要审批；1，需要审批',
+  `created_by` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '创建人',
+  `create_time` TIMESTAMP NOT NULL DEFAULT '1980-01-01 00:00:00' COMMENT '创建时间',
+  `last_updated_by` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '最近一次的更新人',
+  `last_update_time` TIMESTAMP NOT NULL DEFAULT '1980-01-01 00:00:00' ON UPDATE CURRENT_TIMESTAMP COMMENT '最近一次的更新时间',
+  `is_deleted` TINYINT(4) NOT NULL DEFAULT '0' COMMENT '是否删除：0，未删除；1，删除',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_user_role_key` (`user_name`, `role_key`, `namespace`),
+  KEY `idx_user_role_is_deleted` (`is_deleted`)
+  )ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8 COMMENT='用户角色关系表';
+
+DROP TABLE IF EXISTS `role_permission`;
+CREATE TABLE `role_permission` (
+  `id` BIGINT(11) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `role_key` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '角色标识',
+  `permission_key` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '权限标识',
+  `created_by` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '创建人',
+  `create_time` TIMESTAMP NOT NULL DEFAULT '1980-01-01 00:00:00' COMMENT '创建时间',
+  `last_updated_by` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '最近一次的更新人',
+  `last_update_time` TIMESTAMP NOT NULL DEFAULT '1980-01-01 00:00:00' ON UPDATE CURRENT_TIMESTAMP COMMENT '最近一次的更新时间',
+  `is_deleted` TINYINT(4) NOT NULL DEFAULT '0' COMMENT '是否删除：0，未删除；1，删除',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_user_permission_key` (`role_key`, `permission_key`),
+  KEY `idx_user_permission_key` (`is_deleted`)
+  )ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8 COMMENT='角色权限关系表';
+
+INSERT INTO `user`(`user_name`,`password`) VALUES('admin','admin');
+INSERT INTO `user`(`user_name`,`password`) VALUES('guest','guest');
+INSERT INTO `user_role`(`user_name`, `role_key`, `need_approval`) VALUES('admin', 'system_admin', '0');
+
+INSERT INTO `role`(`role_key`) VALUES('system_admin');
+INSERT INTO `role`(`role_key`) VALUES('namespace_developer');
+INSERT INTO `role`(`role_key`) VALUES('namespace_admin');
+
+INSERT INTO `permission`(`permission_key`) VALUES('job:enable');
+INSERT INTO `permission`(`permission_key`) VALUES('job:batchEnable');
+INSERT INTO `permission`(`permission_key`) VALUES('job:disable');
+INSERT INTO `permission`(`permission_key`) VALUES('job:batchDisable');
+INSERT INTO `permission`(`permission_key`) VALUES('job:runAtOnce');
+INSERT INTO `permission`(`permission_key`) VALUES('job:stopAtOnce');
+INSERT INTO `permission`(`permission_key`) VALUES('job:remove');
+INSERT INTO `permission`(`permission_key`) VALUES('job:batchRemove');
+INSERT INTO `permission`(`permission_key`) VALUES('job:add');
+INSERT INTO `permission`(`permission_key`) VALUES('job:copy');
+INSERT INTO `permission`(`permission_key`) VALUES('job:import');
+INSERT INTO `permission`(`permission_key`) VALUES('job:export');
+INSERT INTO `permission`(`permission_key`) VALUES('job:update');
+INSERT INTO `permission`(`permission_key`) VALUES('job:batchSetPreferExecutors');
+INSERT INTO `permission`(`permission_key`) VALUES('executor:restart');
+INSERT INTO `permission`(`permission_key`) VALUES('executor:dump');
+INSERT INTO `permission`(`permission_key`) VALUES('executor:extractOrRecoverTraffic');
+INSERT INTO `permission`(`permission_key`) VALUES('executor:batchExtractOrRecoverTraffic');
+INSERT INTO `permission`(`permission_key`) VALUES('executor:remove');
+INSERT INTO `permission`(`permission_key`) VALUES('executor:batchRemove');
+INSERT INTO `permission`(`permission_key`) VALUES('executor:shardAllAtOnce');
+INSERT INTO `permission`(`permission_key`) VALUES('alarmCenter:setAbnormalJobRead');
+INSERT INTO `permission`(`permission_key`) VALUES('alarmCenter:setTimeout4AlarmJobRead');
+INSERT INTO `permission`(`permission_key`) VALUES('dashboard:cleanShardingCount');
+INSERT INTO `permission`(`permission_key`) VALUES('dashboard:cleanOneJobAnalyse');
+INSERT INTO `permission`(`permission_key`) VALUES('dashboard:cleanAllJobAnalyse');
+INSERT INTO `permission`(`permission_key`) VALUES('dashboard:cleanOneJobExecutorCount');
+INSERT INTO `permission`(`permission_key`) VALUES('registryCenter:addNamespace');
+INSERT INTO `permission`(`permission_key`) VALUES('registryCenter:batchMoveNamespaces');
+INSERT INTO `permission`(`permission_key`) VALUES('registryCenter:exportNamespaces');
+INSERT INTO `permission`(`permission_key`) VALUES('registryCenter:addZkCluster');
+INSERT INTO `permission`(`permission_key`) VALUES('systemConfig');
+INSERT INTO `permission`(`permission_key`) VALUES('authorizationManage');
+
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('system_admin', 'job:enable');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('system_admin', 'job:batchEnable');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('system_admin', 'job:disable');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('system_admin', 'job:batchDisable');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('system_admin', 'job:runAtOnce');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('system_admin', 'job:stopAtOnce');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('system_admin', 'job:remove');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('system_admin', 'job:batchRemove');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('system_admin', 'job:add');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('system_admin', 'job:copy');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('system_admin', 'job:import');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('system_admin', 'job:export');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('system_admin', 'job:update');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('system_admin', 'job:batchSetPreferExecutors');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('system_admin', 'executor:restart');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('system_admin', 'executor:dump');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('system_admin', 'executor:extractOrRecoverTraffic');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('system_admin', 'executor:batchExtractOrRecoverTraffic');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('system_admin', 'executor:remove');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('system_admin', 'executor:batchRemove');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('system_admin', 'executor:shardAllAtOnce');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('system_admin', 'alarmCenter:setAbnormalJobRead');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('system_admin', 'alarmCenter:setTimeout4AlarmJobRead');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('system_admin', 'dashboard:cleanShardingCount');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('system_admin', 'dashboard:cleanOneJobAnalyse');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('system_admin', 'dashboard:cleanAllJobAnalyse');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('system_admin', 'dashboard:cleanOneJobExecutorCount');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('system_admin', 'registryCenter:addNamespace');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('system_admin', 'registryCenter:batchMoveNamespaces');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('system_admin', 'registryCenter:exportNamespaces');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('system_admin', 'registryCenter:addZkCluster');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('system_admin', 'systemConfig');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('system_admin', 'authorizationManage');
+
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('namespace_developer', 'job:enable');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('namespace_developer', 'job:batchEnable');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('namespace_developer', 'job:disable');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('namespace_developer', 'job:batchDisable');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('namespace_developer', 'job:stopAtOnce');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('namespace_developer', 'alarmCenter:setAbnormalJobRead');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('namespace_developer', 'alarmCenter:setTimeout4AlarmJobRead');
+
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('namespace_admin', 'job:enable');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('namespace_admin', 'job:batchEnable');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('namespace_admin', 'job:disable');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('namespace_admin', 'job:batchDisable');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('namespace_admin', 'job:runAtOnce');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('namespace_admin', 'job:stopAtOnce');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('namespace_admin', 'job:remove');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('namespace_admin', 'job:batchRemove');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('namespace_admin', 'job:add');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('namespace_admin', 'job:copy');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('namespace_admin', 'job:import');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('namespace_admin', 'job:export');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('namespace_admin', 'job:update');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('namespace_admin', 'job:batchSetPreferExecutors');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('namespace_admin', 'executor:restart');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('namespace_admin', 'executor:dump');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('namespace_admin', 'executor:extractOrRecoverTraffic');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('namespace_admin', 'executor:batchExtractOrRecoverTraffic');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('namespace_admin', 'executor:remove');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('namespace_admin', 'executor:batchRemove');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('namespace_admin', 'executor:shardAllAtOnce');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('namespace_admin', 'alarmCenter:setAbnormalJobRead');
+INSERT INTO `role_permission`(`role_key`, `permission_key`) VALUES('namespace_admin', 'alarmCenter:setTimeout4AlarmJobRead');
+
+-- 3.0.1 update
+ALTER TABLE `role` ADD `is_relating_to_namespace` TINYINT(4) NOT NULL DEFAULT '0' COMMENT '是否关联域：0，不关联；1，关联';
+ALTER TABLE `user_role` ADD KEY `idx_user_role_u_r_n_n_i` (`user_name`, `role_key`, `namespace`, `need_approval`, `is_deleted`);
+ALTER TABLE `user_role` ADD KEY `idx_user_role_r_n_n_i` (`role_key`, `namespace`, `need_approval`, `is_deleted`);
+ALTER TABLE `user_role` ADD KEY `idx_user_role_n_n_i` (`namespace`, `need_approval`, `is_deleted`);
+ALTER TABLE `user_role` ADD KEY `idx_user_role_n_i` (`need_approval`, `is_deleted`);
+
+UPDATE `role` SET `role_name`='系统管理', `is_relating_to_namespace`='0' WHERE `role_key`='system_admin';
+UPDATE `role` SET `role_name`='域开发管理', `is_relating_to_namespace`='1' WHERE `role_key`='namespace_developer';
+UPDATE `role` SET `role_name`='域管理', `is_relating_to_namespace`='1' WHERE `role_key`='namespace_admin';
+
+-- 3.2.0 update
+ALTER TABLE `job_config` ADD `rerun` tinyint(4) NOT NULL DEFAULT '0' COMMENT '是否重跑标志';
+
+-- 3.3.0 update
+ALTER TABLE `zk_cluster_info` ADD `description` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '集群描述';
+ALTER TABLE `job_config` ADD `up_stream` VARCHAR(1000) NOT NULL DEFAULT '' COMMENT '上游作业',ADD `down_stream` VARCHAR(1000) NOT NULL DEFAULT '' COMMENT '下游作业';
+ALTER TABLE `namespace_info` ADD `bus_id` VARCHAR(255) NOT NULL DEFAULT  '' COMMENT '业务组id';
+
+CREATE TABLE `saturn_dashboard_history` (
+  `id` BIGINT(11) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `zk_cluster` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '所属zk集群',
+  `record_type` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '类型',
+  `topic` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '主题',
+  `content` LONGTEXT  COMMENT '内容',
+  `record_date` DATE  COMMENT '记录日期',
+  `created_by` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '创建人',
+  `create_time` TIMESTAMP NOT NULL DEFAULT '1980-01-01 00:00:00' COMMENT '创建时间',
+  `last_updated_by` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '最近一次的更新人',
+  `last_update_time` TIMESTAMP NOT NULL DEFAULT '1980-01-01 00:00:00' ON UPDATE CURRENT_TIMESTAMP COMMENT '最近一次的更新时间',
+  `is_deleted` TINYINT(4) NOT NULL DEFAULT '0' COMMENT '是否删除：0，未删除；1，删除',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_dashboard_history_zk_cluster_record_type_topic_record_date` (`zk_cluster`, `record_type`, `topic`, `record_date`)
+) ENGINE = InnoDB AUTO_INCREMENT = 1 DEFAULT CHARSET = utf8 COMMENT ='dashboard历史记录表';
+
+
+
+INSERT INTO `sys_config`(`property`, `value`) VALUES('MAX_JOB_NUM', '100');
+INSERT INTO `sys_config`(`property`, `value`) VALUES('INTERVAL_TIME_OF_ENABLED_REPORT', '5');
+INSERT INTO `sys_config`(`property`, `value`) VALUES('ALARM_RAISED_ON_EXECUTOR_RESTART', 'false');
+INSERT INTO `sys_config`(`property`, `value`) VALUES('MAX_SECONDS_FORCE_KILL_EXECUTOR', '300');
+INSERT INTO `sys_config`(`property`, `value`) VALUES('AUTHORIZATION_ENABLED', 'false');
+INSERT INTO `sys_config`(`property`, `value`) VALUES('CONSOLE_ZK_CLUSTER_MAPPING', 'default:/default');
+INSERT INTO `sys_config`(`property`, `value`) VALUES('IDC_ZK_CLUSTER_MAPPING', '');
+INSERT INTO `sys_config`(`property`, `value`) VALUES('IDC_CONSOLE_ID_MAPPING', '');
+INSERT INTO `sys_config`(`property`, `value`) VALUES('IDC_CONSOLE_DOMAIN_MAPPING', '');

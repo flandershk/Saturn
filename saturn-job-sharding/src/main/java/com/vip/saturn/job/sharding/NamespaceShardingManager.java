@@ -1,6 +1,7 @@
 package com.vip.saturn.job.sharding;
 
 import org.apache.curator.framework.CuratorFramework;
+import org.apache.zookeeper.KeeperException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -9,6 +10,7 @@ import com.vip.saturn.job.integrate.service.UpdateJobConfigService;
 import com.vip.saturn.job.sharding.listener.AbstractConnectionListener;
 import com.vip.saturn.job.sharding.listener.AddOrRemoveJobListener;
 import com.vip.saturn.job.sharding.listener.ExecutorOnlineOfflineTriggerShardingListener;
+import com.vip.saturn.job.sharding.listener.ExecutorTrafficTriggerShardingListener;
 import com.vip.saturn.job.sharding.listener.LeadershipElectionListener;
 import com.vip.saturn.job.sharding.listener.SaturnExecutorsShardingTriggerShardingListener;
 import com.vip.saturn.job.sharding.node.SaturnExecutorsNode;
@@ -23,6 +25,7 @@ import com.vip.saturn.job.sharding.service.ShardingTreeCacheService;
  *
  */
 public class NamespaceShardingManager {
+
 	private static final Logger log = LoggerFactory.getLogger(NamespaceShardingManager.class);
 
 	private NamespaceShardingService namespaceShardingService;
@@ -90,7 +93,7 @@ public class NamespaceShardingManager {
 	 * watch 1-level-depth of the children of /$Jobs
 	 */
 	private void addNewOrRemoveJobListener() throws Exception {
-		String path = SaturnExecutorsNode.$JOBSNODE_PATH;
+		String path = SaturnExecutorsNode.JOBSNODE_PATH;
 		int depth = 1;
 		createNodePathIfNotExists(path);
 		shardingTreeCacheService.addTreeCacheIfAbsent(path, depth);
@@ -108,6 +111,8 @@ public class NamespaceShardingManager {
 		shardingTreeCacheService.addTreeCacheIfAbsent(path, depth);
 		shardingTreeCacheService.addTreeCacheListenerIfAbsent(path, depth,
 				new ExecutorOnlineOfflineTriggerShardingListener(namespaceShardingService, executorCleanService));
+		shardingTreeCacheService.addTreeCacheListenerIfAbsent(path, depth,
+				new ExecutorTrafficTriggerShardingListener(namespaceShardingService));
 	}
 
 	/**
@@ -134,14 +139,13 @@ public class NamespaceShardingManager {
 				new LeadershipElectionListener(namespaceShardingService));
 	}
 
-	private void createNodePathIfNotExists(String path) throws InterruptedException {
-		try {
-			if (curatorFramework.checkExists().forPath(path) == null) {
+	private void createNodePathIfNotExists(String path) throws Exception {
+		if (curatorFramework.checkExists().forPath(path) == null) {
+			try {
 				curatorFramework.create().creatingParentsIfNeeded().forPath(path);
+			} catch (KeeperException.NodeExistsException e) {// NOSONAR
+				log.info("node {} already existed, so skip creation", path);
 			}
-		} catch (InterruptedException e) {
-			throw e;
-		} catch (Exception e) { // NOSONAR
 		}
 	}
 

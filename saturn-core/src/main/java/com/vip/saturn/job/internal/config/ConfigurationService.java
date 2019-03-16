@@ -3,9 +3,9 @@
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
@@ -15,18 +15,15 @@
 package com.vip.saturn.job.internal.config;
 
 import com.google.common.base.Strings;
-import com.vip.saturn.job.basic.AbstractSaturnService;
-import com.vip.saturn.job.basic.JobScheduler;
-import com.vip.saturn.job.basic.SaturnConstant;
+import com.google.gson.reflect.TypeToken;
+import com.vip.saturn.job.basic.*;
 import com.vip.saturn.job.exception.ShardingItemParametersException;
 import com.vip.saturn.job.sharding.node.SaturnExecutorsNode;
 import com.vip.saturn.job.threads.SaturnThreadFactory;
 import com.vip.saturn.job.utils.JsonUtils;
-
-import org.apache.commons.collections.CollectionUtils;
+import com.vip.saturn.job.utils.LogEvents;
+import com.vip.saturn.job.utils.LogUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.codehaus.jackson.map.type.MapType;
-import org.codehaus.jackson.map.type.TypeFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,8 +33,8 @@ import java.util.concurrent.Executors;
 
 /**
  * 弹性化分布式作业配置服务.
- * 
- * 
+ *
+ *
  */
 public class ConfigurationService extends AbstractSaturnService {
 
@@ -48,14 +45,9 @@ public class ConfigurationService extends AbstractSaturnService {
 	// 参考http://stackoverflow.com/questions/17963969/java-regex-pattern-split-commna
 	private static final String PATTERN = ",(?=(([^\"]*\"){2})*[^\"]*$)";
 
-	private MapType customContextType = TypeFactory.defaultInstance().constructMapType(HashMap.class, String.class,
-			String.class);
-
 	private TimeZone jobTimeZone;
 
 	private ExecutorService executorService;
-
-	private static final Object lock = new Object();
 
 	public ConfigurationService(JobScheduler jobScheduler) {
 		super(jobScheduler);
@@ -77,34 +69,30 @@ public class ConfigurationService extends AbstractSaturnService {
 	}
 
 	public void notifyJobEnabledOrNot() {
-		executorService.execute(new Runnable() {
-			@Override
-			public void run() {
-				synchronized (lock) {
-					try {
-						if (isJobEnabled()) {
-							jobScheduler.getJob().notifyJobEnabled();
-						} else {
-							jobScheduler.getJob().notifyJobDisabled();
-						}
-					} catch (Throwable t) {
-						LOGGER.error(t.getMessage(), t);
-					}
-				}
-			}
-		});
+		if (isJobEnabled()) {
+			notifyJobEnabledIfNecessary();
+		} else {
+			notifyJobDisabled();
+		}
 	}
 
-	public void notifyJobEnabled() {
+	/**
+	 * 如果是本地模式，并且配置了优先Executor，并且当前Executor不属于优先Executor，则不需要通知
+	 */
+	public void notifyJobEnabledIfNecessary() {
+		if (isLocalMode()) {
+			List<String> preferList = getPreferList();
+			if (preferList != null && !preferList.isEmpty() && !preferList.contains(executorName)) {
+				return;
+			}
+		}
 		executorService.execute(new Runnable() {
 			@Override
 			public void run() {
-				synchronized (lock) {
-					try {
-						jobScheduler.getJob().notifyJobEnabled();
-					} catch (Throwable t) {
-						LOGGER.error(t.getMessage(), t);
-					}
+				try {
+					jobScheduler.getJob().notifyJobEnabled();
+				} catch (Throwable t) {
+					LogUtils.error(LOGGER, LogEvents.ExecutorEvent.COMMON, t.getMessage(), t);
 				}
 			}
 		});
@@ -114,40 +102,18 @@ public class ConfigurationService extends AbstractSaturnService {
 		executorService.execute(new Runnable() {
 			@Override
 			public void run() {
-				synchronized (lock) {
-					try {
-						jobScheduler.getJob().notifyJobDisabled();
-					} catch (Throwable t) {
-						LOGGER.error(t.getMessage(), t);
-					}
+				try {
+					jobScheduler.getJob().notifyJobDisabled();
+				} catch (Throwable t) {
+					LogUtils.error(LOGGER, LogEvents.ExecutorEvent.COMMON, t.getMessage(), t);
 				}
 			}
 		});
 	}
 
 	/**
-	 * 判断是否需要发送Enabled或者Disabled事件
-	 * 
-	 * 非Local模式的作业，所有的Executor都会收到事件
-	 * 
-	 * 对于Local模式的作业，如果配置了优先Executor，那么事件只会给优先Executor的服务器发送
-	 * 
-	 * @return
-	 */
-	public boolean needSendJobEnabledOrDisabledEvent() {
-		if (!this.isLocalMode()) {
-			return true;
-		}
-		List<String> perferList = this.getPreferList();
-		if (CollectionUtils.isEmpty(perferList)) {
-			return true;
-		}
-		return perferList.contains(this.executorName);
-	}
-
-	/**
 	 * 获取作业分片总数.
-	 * 
+	 *
 	 * @return 作业分片总数
 	 */
 	public int getShardingTotalCount() {
@@ -161,7 +127,7 @@ public class ConfigurationService extends AbstractSaturnService {
 	/**
 	 * 获取分片序列号和个性化参数对照表.<br>
 	 * 如果是本地模式的作业，则获取到[-1=xx]
-	 * 
+	 *
 	 * @return 分片序列号和个性化参数对照表
 	 */
 	public Map<Integer, String> getShardingItemParameters() {
@@ -177,7 +143,7 @@ public class ConfigurationService extends AbstractSaturnService {
 			String item = "";
 			String exec = "";
 
-			int index = each.indexOf("=");
+			int index = each.indexOf('=');
 			if (index > -1) {
 				item = each.substring(0, index).trim();
 				exec = each.substring(index + 1, each.length()).trim();
@@ -208,10 +174,11 @@ public class ConfigurationService extends AbstractSaturnService {
 				String item = next.getKey();
 				String exec = next.getValue();
 				try {
-					result.put(Integer.parseInt(item), exec);
+					result.put(Integer.valueOf(item), exec);
 				} catch (final NumberFormatException ex) {
-					throw new ShardingItemParametersException("Sharding item parameters key '%s' is not an integer.",
-							item);
+					LogUtils.warn(LOGGER, LogEvents.ExecutorEvent.COMMON,
+							"Sharding item key '%s' is invalid, it should be an integer, key '%s' will be dropped",
+							item, item, ex);
 				}
 			}
 		}
@@ -220,7 +187,7 @@ public class ConfigurationService extends AbstractSaturnService {
 
 	/**
 	 * 获取作业自定义参数.
-	 * 
+	 *
 	 * @return 作业自定义参数
 	 */
 	public String getJobParameter() {
@@ -256,7 +223,7 @@ public class ConfigurationService extends AbstractSaturnService {
 
 	/**
 	 * 获取作业启动时间的cron表达式.
-	 * 
+	 *
 	 * @return 作业启动时间的cron表达式
 	 */
 	public String getCron() {
@@ -287,96 +254,30 @@ public class ConfigurationService extends AbstractSaturnService {
 	 * 该时间是否在作业暂停时间段范围内。
 	 * <p>
 	 * 特别的，无论pausePeriodDate，还是pausePeriodTime，如果解析发生异常，则忽略该节点，视为没有配置该日期或时分段。
-	 * 
+	 *
 	 * @param date 时间，本机时区的时间
-	 * 
+	 *
 	 * @return 该时间是否在作业暂停时间段范围内。
 	 */
 	public boolean isInPausePeriod(Date date) {
 		Calendar calendar = Calendar.getInstance(getTimeZone());
 		calendar.setTime(date);
-		int M = calendar.get(Calendar.MONTH) + 1; // Calendar.MONTH begin from 0.
-		int d = calendar.get(Calendar.DAY_OF_MONTH);
-		int h = calendar.get(Calendar.HOUR_OF_DAY);
-		int m = calendar.get(Calendar.MINUTE);
+		int month = calendar.get(Calendar.MONTH) + 1; // Calendar.MONTH begin from 0.
+		int day = calendar.get(Calendar.DAY_OF_MONTH);
+		int hour = calendar.get(Calendar.HOUR_OF_DAY);
+		int minute = calendar.get(Calendar.MINUTE);
 
 		boolean dateIn = false;
 		String pausePeriodDate = jobConfiguration.getPausePeriodDate();
 		boolean pausePeriodDateIsEmpty = (pausePeriodDate == null || pausePeriodDate.trim().isEmpty());
 		if (!pausePeriodDateIsEmpty) {
-			String[] periodsDate = pausePeriodDate.split(",");
-			if (periodsDate != null) {
-				for (String period : periodsDate) {
-					String[] tmp = period.trim().split("-");
-					if (tmp != null && tmp.length == 2) {
-						String left = tmp[0].trim();
-						String right = tmp[1].trim();
-						String[] MdLeft = left.split("/");
-						String[] MdRight = right.split("/");
-						if (MdLeft != null && MdLeft.length == 2 && MdRight != null && MdRight.length == 2) {
-							try {
-								int MLeft = Integer.parseInt(MdLeft[0]);
-								int dLeft = Integer.parseInt(MdLeft[1]);
-								int MRight = Integer.parseInt(MdRight[0]);
-								int dRight = Integer.parseInt(MdRight[1]);
-								dateIn = (M > MLeft || M == MLeft && d >= dLeft) // NOSONAR
-										&& (M < MRight || M == MRight && d <= dRight); // NOSONAR
-								if (dateIn) {
-									break;
-								}
-							} catch (NumberFormatException e) {
-								dateIn = false;
-								break;
-							}
-						} else {
-							dateIn = false;
-							break;
-						}
-					} else {
-						dateIn = false;
-						break;
-					}
-				}
-			}
+			dateIn = checkIsInPausePeriodDateOrTime(month, day, "/", pausePeriodDate);
 		}
 		boolean timeIn = false;
 		String pausePeriodTime = jobConfiguration.getPausePeriodTime();
 		boolean pausePeriodTimeIsEmpty = (pausePeriodTime == null || pausePeriodTime.trim().isEmpty());
 		if (!pausePeriodTimeIsEmpty) {
-			String[] periodsTime = pausePeriodTime.split(",");
-			if (periodsTime != null) {
-				for (String period : periodsTime) {
-					String[] tmp = period.trim().split("-");
-					if (tmp != null && tmp.length == 2) {
-						String left = tmp[0].trim();
-						String right = tmp[1].trim();
-						String[] hmLeft = left.split(":");
-						String[] hmRight = right.split(":");
-						if (hmLeft != null && hmLeft.length == 2 && hmRight != null && hmRight.length == 2) {
-							try {
-								int hLeft = Integer.parseInt(hmLeft[0]);
-								int mLeft = Integer.parseInt(hmLeft[1]);
-								int hRight = Integer.parseInt(hmRight[0]);
-								int mRight = Integer.parseInt(hmRight[1]);
-								timeIn = (h > hLeft || h == hLeft && m >= mLeft) // NOSONAR
-										&& (h < hRight || h == hRight && m <= mRight); // NOSONAR
-								if (timeIn) {
-									break;
-								}
-							} catch (NumberFormatException e) {
-								timeIn = false;
-								break;
-							}
-						} else {
-							timeIn = false;
-							break;
-						}
-					} else {
-						timeIn = false;
-						break;
-					}
-				}
-			}
+			timeIn = checkIsInPausePeriodDateOrTime(hour, minute, ":", pausePeriodTime);
 		}
 
 		if (pausePeriodDateIsEmpty) {
@@ -394,9 +295,45 @@ public class ConfigurationService extends AbstractSaturnService {
 		}
 	}
 
+	private static boolean checkIsInPausePeriodDateOrTime(int h, int m, String splitChar,
+			String pausePeriodDateOrTime) {
+		String[] periods = pausePeriodDateOrTime.split(",");
+
+		boolean result = false;
+		for (String period : periods) {
+			String[] tmp = period.trim().split("-");
+			if (tmp != null && tmp.length == 2) {
+				String left = tmp[0].trim();
+				String right = tmp[1].trim();
+				String[] hmLeft = left.split(splitChar);
+				String[] hmRight = right.split(splitChar);
+				if (hmLeft != null && hmLeft.length == 2 && hmRight != null && hmRight.length == 2) {
+					try {
+						int hLeft = Integer.parseInt(hmLeft[0]);
+						int mLeft = Integer.parseInt(hmLeft[1]);
+						int hRight = Integer.parseInt(hmRight[0]);
+						int mRight = Integer.parseInt(hmRight[1]);
+						result = (h > hLeft || h == hLeft && m >= mLeft) // NOSONAR
+								&& (h < hRight || h == hRight && m <= mRight); // NOSONAR
+						if (result) {
+							break;
+						}
+					} catch (NumberFormatException e) {
+						return false;
+					}
+				} else {
+					return false;
+				}
+			} else {
+				return false;
+			}
+		}
+		return result;
+	}
+
 	/**
 	 * 获取是否开启失效转移.
-	 * 
+	 *
 	 * @return 是否开启失效转移
 	 */
 	public boolean isFailover() {
@@ -405,7 +342,7 @@ public class ConfigurationService extends AbstractSaturnService {
 
 	/**
 	 * 获取是否开启作业.
-	 * 
+	 *
 	 * @return 作业是否开启
 	 */
 	public boolean isJobEnabled() {
@@ -413,8 +350,28 @@ public class ConfigurationService extends AbstractSaturnService {
 	}
 
 	/**
+	 * 获取作业是否上报状态。
+	 * 如果存在/config/enabledReport节点，则返回节点的内容；
+	 * 如果不存在/config/enabledReport节点，如果作业类型是Java或者Shell，则返回true；否则，返回false；
+	 */
+	public boolean isEnabledReport() {
+		Boolean isEnabledReportInJobConfig = jobConfiguration.isEnabledReport();
+
+		if (isEnabledReportInJobConfig != null) {
+			return isEnabledReportInJobConfig;
+		}
+		// cron和passive作业默认上报
+		JobType jobType = JobTypeManager.get(jobConfiguration.getJobType());
+		if (jobType.isCron() || jobType.isPassive()) {
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
 	 * 获取超时时间
-	 * 
+	 *
 	 * @return 超时时间
 	 */
 	public int getTimeoutSeconds() {
@@ -438,6 +395,7 @@ public class ConfigurationService extends AbstractSaturnService {
 		return toCustomContext(jobNodeData);
 	}
 
+
 	/**
 	 * 将str转为map
 	 *
@@ -445,18 +403,16 @@ public class ConfigurationService extends AbstractSaturnService {
 	 * @return 自定义上下文map
 	 */
 	private Map<String, String> toCustomContext(String customContextStr) {
-		Map<String, String> customContext = null;
-		if (customContextStr != null) {
-			customContext = JsonUtils.fromJSON(customContextStr, customContextType);
-		}
+		Map<String, String> customContext = JsonUtils.fromJson(customContextStr, new TypeToken<Map<String, String>>() {
+		}.getType());
 		if (customContext == null) {
 			customContext = new HashMap<>();
 		}
 		return customContext;
 	}
 
-	public String getRawJobType() {
-		return jobConfiguration.getJobType();
+	public JobType getJobType() {
+		return JobTypeManager.get(jobConfiguration.getJobType());
 	}
 
 	/**
@@ -513,17 +469,19 @@ public class ConfigurationService extends AbstractSaturnService {
 				preferList.add(prefer);
 			}
 		} else { // docker server, get the real executorList by task
-			String task = prefer.substring(1);
-			for (int i = 0; i < allExistsExecutors.size(); i++) {
-				String executor = allExistsExecutors.get(i);
-				if (coordinatorRegistryCenter.isExisted(SaturnExecutorsNode.getExecutorTaskNodePath(executor))) {
-					String taskData = coordinatorRegistryCenter
-							.get(SaturnExecutorsNode.getExecutorTaskNodePath(executor));
-					if (taskData != null && task.equals(taskData)) {
-						if (!preferList.contains(executor)) {
-							preferList.add(executor);
-						}
-					}
+			fillRealPreferListOfContainer(preferList, prefer, allExistsExecutors);
+		}
+	}
+
+	private void fillRealPreferListOfContainer(List<String> preferList, String prefer,
+			List<String> allExistsExecutors) {
+		String task = prefer.substring(1);
+		for (int i = 0; i < allExistsExecutors.size(); i++) {
+			String executor = allExistsExecutors.get(i);
+			if (coordinatorRegistryCenter.isExisted(SaturnExecutorsNode.getExecutorTaskNodePath(executor))) {
+				String taskData = coordinatorRegistryCenter.get(SaturnExecutorsNode.getExecutorTaskNodePath(executor));
+				if (taskData != null && task.equals(taskData) && !preferList.contains(executor)) {
+					preferList.add(executor);
 				}
 			}
 		}
@@ -532,4 +490,21 @@ public class ConfigurationService extends AbstractSaturnService {
 	public boolean isUseDispreferList() {
 		return jobConfiguration.isUseDispreferList();
 	}
+
+	public List<String> getDownStream() {
+		List<String> downStreamList = new ArrayList<>();
+		String downStream = jobConfiguration.getDownStream();
+		if (StringUtils.isBlank(downStream)) {
+			return downStreamList;
+		}
+		String[] split = downStream.split(",");
+		for (String childName : split) {
+			String childNameTrim = childName.trim();
+			if (!childNameTrim.isEmpty()) {
+				downStreamList.add(childNameTrim);
+			}
+		}
+		return downStreamList;
+	}
+
 }

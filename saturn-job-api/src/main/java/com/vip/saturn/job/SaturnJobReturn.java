@@ -3,6 +3,7 @@ package com.vip.saturn.job;
 import java.io.Serializable;
 import java.lang.reflect.Field;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 作为作业执行的返回, 每个分片对应一个SaturnJobReturn对象
@@ -50,6 +51,23 @@ public class SaturnJobReturn implements Serializable {
 	public SaturnJobReturn() {
 	}
 
+	/**
+	 * returnCode默认0（成功），errorGroup默认200（成功）。
+	 *
+	 * @param returnMsg 作业执行返回字符串信息
+	 * @see SaturnSystemReturnCode
+	 * @see SaturnSystemErrorGroup
+	 */
+	public SaturnJobReturn(String returnMsg) {
+		this.returnMsg = returnMsg;
+	}
+
+	public SaturnJobReturn(int returnCode, String returnMsg, int errorGroup) {
+		this.returnCode = returnCode;
+		this.returnMsg = returnMsg;
+		this.errorGroup = errorGroup;
+	}
+
 	public void copyFrom(Object source) {
 		Class<?> clazz = source.getClass();
 		try {
@@ -89,22 +107,6 @@ public class SaturnJobReturn implements Serializable {
 		}
 	}
 
-	/**
-	 * returnCode默认0（成功），errorGroup默认200（成功）。
-	 * @param returnMsg 作业执行返回字符串信息
-	 * @see SaturnSystemReturnCode
-	 * @see SaturnSystemErrorGroup
-	 */
-	public SaturnJobReturn(String returnMsg) {
-		this.returnMsg = returnMsg;
-	}
-
-	public SaturnJobReturn(int returnCode, String returnMsg, int errorGroup) {
-		this.returnCode = returnCode;
-		this.returnMsg = returnMsg;
-		this.errorGroup = errorGroup;
-	}
-
 	public int getReturnCode() {
 		return returnCode;
 	}
@@ -135,6 +137,21 @@ public class SaturnJobReturn implements Serializable {
 
 	public void setProp(Map<String, String> prop) {
 		this.prop = prop;
+	}
+
+	public void reconsumeLater() {
+		if (prop == null) {
+			prop = new ConcurrentHashMap<>();
+		}
+		prop.put(SaturnJobReturn.MSG_CONSUME_STATUS_PROP_KEY, SaturnConsumeStatus.RECONSUME_LATER.name());
+	}
+
+	public void reconsumeLater(int delayLevel) {
+		if (prop == null) {
+			prop = new ConcurrentHashMap<>();
+		}
+		prop.put(SaturnJobReturn.MSG_CONSUME_STATUS_PROP_KEY, SaturnConsumeStatus.RECONSUME_LATER.name());
+		prop.put(SaturnJobReturn.DELAY_LEVEL_WHEN_RECONSUME_PROP_KEY, String.valueOf(delayLevel));
 	}
 
 	@Override

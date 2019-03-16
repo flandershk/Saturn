@@ -3,9 +3,9 @@
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
@@ -14,30 +14,26 @@
 
 package com.vip.saturn.job.internal.execution;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-
 import com.vip.saturn.job.basic.AbstractSaturnService;
 import com.vip.saturn.job.basic.JobExecutionMultipleShardingContext;
 import com.vip.saturn.job.basic.JobScheduler;
 import com.vip.saturn.job.basic.SaturnExecutionContext;
 import com.vip.saturn.job.internal.config.ConfigurationService;
 import com.vip.saturn.job.internal.failover.FailoverService;
-import com.vip.saturn.job.internal.offset.OffsetService;
+import com.vip.saturn.job.trigger.Triggered;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 /**
  * 作业运行时上下文服务.
- * 
- * 
  */
 public class ExecutionContextService extends AbstractSaturnService {
 
 	private ConfigurationService configService;
 
 	private FailoverService failoverService;
-
-	private OffsetService offsetService;
 
 	public ExecutionContextService(JobScheduler jobScheduler) {
 		super(jobScheduler);
@@ -47,21 +43,24 @@ public class ExecutionContextService extends AbstractSaturnService {
 	public void start() {
 		configService = jobScheduler.getConfigService();
 		failoverService = jobScheduler.getFailoverService();
-		offsetService = jobScheduler.getOffsetService();
 	}
 
 	/**
 	 * 获取当前作业服务器运行时分片上下文.
-	 * 
+	 *
 	 * @return 当前作业服务器运行时分片上下文
 	 */
-	public JobExecutionMultipleShardingContext getJobExecutionShardingContext() {
-		// JobExecutionMultipleShardingContext result = new JobExecutionMultipleShardingContext();
+	public JobExecutionMultipleShardingContext getJobExecutionShardingContext(final Triggered triggered) {
 		SaturnExecutionContext result = new SaturnExecutionContext();
 		result.setJobName(configService.getJobName());
+		result.setQueueName(configService.getQueueName());
 		result.setShardingTotalCount(configService.getShardingTotalCount());
+		result.setTriggered(triggered);
 		List<Integer> shardingItems = getShardingItems();
-		removeRunningItems(shardingItems);
+		boolean isEnabledReport = configService.isEnabledReport();
+		if (isEnabledReport) {
+			removeRunningItems(shardingItems);
+		}
 		result.setShardingItems(shardingItems);
 		result.setJobParameter(configService.getJobParameter());
 		result.setCustomContext(configService.getCustomContext());
@@ -87,8 +86,6 @@ public class ExecutionContextService extends AbstractSaturnService {
 				}
 			}
 		}
-		result.setOffsets(offsetService.getOffsets(result.getShardingItems()));
-
 		if (jobConfiguration.getTimeoutSeconds() > 0) {
 			result.setTimetoutSeconds(jobConfiguration.getTimeoutSeconds());
 		}
@@ -115,7 +112,8 @@ public class ExecutionContextService extends AbstractSaturnService {
 	 */
 	public List<Integer> getShardingItems() {
 		List<Integer> shardingItems = jobScheduler.getShardingService().getLocalHostShardingItems();
-		if (configService.isFailover()) {
+		boolean isEnabledReport = configService.isEnabledReport();
+		if (configService.isFailover() && isEnabledReport) {
 			List<Integer> failoverItems = failoverService.getLocalHostFailoverItems();
 			if (!failoverItems.isEmpty()) {
 				return failoverItems;

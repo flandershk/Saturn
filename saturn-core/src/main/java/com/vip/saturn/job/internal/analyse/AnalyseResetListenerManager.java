@@ -1,19 +1,17 @@
 /**
- * Copyright 2016 vip.com.
- * <p>
- * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * 
+ * Copyright 2016 vip.com. <p> Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file
+ * except in compliance with the License. You may obtain a copy of the License at
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
- * </p>
+ * specific language governing permissions and limitations under the License. </p>
  */
 
 package com.vip.saturn.job.internal.analyse;
 
+import com.vip.saturn.job.utils.LogUtils;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.recipes.cache.TreeCacheEvent;
 import org.apache.curator.framework.recipes.cache.TreeCacheEvent.Type;
@@ -30,6 +28,7 @@ import com.vip.saturn.job.internal.storage.JobNodePath;
  * @author chembo.huang
  */
 public class AnalyseResetListenerManager extends AbstractListenerManager {
+
 	static Logger log = LoggerFactory.getLogger(AnalyseResetListenerManager.class);
 
 	private boolean isShutdown = false;
@@ -40,7 +39,6 @@ public class AnalyseResetListenerManager extends AbstractListenerManager {
 
 	@Override
 	public void start() {
-		// addDataListener(new AnalyseResetPathListener(), jobName);
 		zkCacheManager.addTreeCacheListener(new AnalyseResetPathListener(),
 				JobNodePath.getNodeFullPath(jobName, AnalyseNode.RESET), 0);
 	}
@@ -49,15 +47,16 @@ public class AnalyseResetListenerManager extends AbstractListenerManager {
 
 		@Override
 		protected void dataChanged(CuratorFramework client, TreeCacheEvent event, String path) {
-			if (isShutdown)
+			if (isShutdown) {
 				return;
+			}
 			if (JobNodePath.getNodeFullPath(jobName, AnalyseNode.RESET).equals(path)
 					&& (Type.NODE_UPDATED == event.getType() || Type.NODE_ADDED == event.getType())) {
 				if (ResetCountType.RESET_ANALYSE.equals(new String(event.getData().getData()))) {
-					log.info("[{}] msg=job:{} reset anaylse count.", jobName, jobName);
+					LogUtils.info(log, jobName, "job:{} reset anaylse count.", jobName);
 					ProcessCountStatistics.resetAnalyseCount(executorName, jobName);
 				} else if (ResetCountType.RESET_SERVERS.equals(new String(event.getData().getData()))) {
-					log.info("[{}] msg=job:{} reset success/failure count.", jobName, jobName);
+					LogUtils.info(log, jobName, "job:{} reset success/failure count", jobName);
 					ProcessCountStatistics.resetSuccessFailureCount(executorName, jobName);
 				}
 			}

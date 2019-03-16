@@ -1,6 +1,7 @@
 package com.vip.saturn.job.utils;
 
-import com.vip.saturn.job.basic.SaturnConstant;
+import com.vip.saturn.job.basic.JobType;
+import com.vip.saturn.job.basic.JobTypeManager;
 import com.vip.saturn.job.executor.SaturnExecutorsNode;
 import com.vip.saturn.job.internal.config.ConfigurationNode;
 import com.vip.saturn.job.internal.execution.ExecutionNode;
@@ -30,64 +31,59 @@ import java.util.regex.Pattern;
 
 /**
  * 用于处理Shell的相关pid功能
- * 
- * @author linzhaoming
  *
+ * @author linzhaoming
  */
 public class ScriptPidUtils {
+
 	private static final Logger log = LoggerFactory.getLogger(ScriptPidUtils.class);
 
-	public static long UNKNOWN_PID = -1;
+	public static final long UNKNOWN_PID = -1;
 
-	/** 系统分隔符 */
+	/**
+	 * 系统分隔符
+	 */
 	protected static final String FILESEPARATOR = System.getProperty("file.separator");
 
 	/**
-	 * Saturn的运行目录
-	 * <p>
-	 * ${HOME}/.saturn/executing
+	 * Saturn的运行目录 <p> ${HOME}/.saturn/executing
 	 */
-	public static final String EXECUTINGPATH = System.getProperty("user.home") + FILESEPARATOR + ".saturn"
-			+ FILESEPARATOR + "executing";
+	public static final String EXECUTINGPATH =
+			System.getProperty("user.home") + FILESEPARATOR + ".saturn" + FILESEPARATOR + "executing";
 
 	/**
-	 * Saturn的运行目录
-	 * <p>
-	 * ${HOME}/.saturn/output
+	 * Saturn的运行目录 <p> ${HOME}/.saturn/output
 	 */
-	public static final String OUTPUT_PATH = System.getProperty("user.home") + FILESEPARATOR + ".saturn" + FILESEPARATOR
-			+ "output";
+	public static final String OUTPUT_PATH =
+			System.getProperty("user.home") + FILESEPARATOR + ".saturn" + FILESEPARATOR + "output";
 
 	/**
-	 * 作业执行的运行目录
-	 * <p>
-	 * 目录: ${HOME}/.saturn/executing/[executorName]/[jobName]
+	 * 作业执行的运行目录 <p> 目录: ${HOME}/.saturn/executing/[executorName]/[jobName]
 	 */
 	public static final String EXECUTINGJOBPATH = EXECUTINGPATH + FILESEPARATOR + "%s" + FILESEPARATOR + "%s";
 
 	/**
-	 * 作业执行的Pid文件
-	 * <p>
-	 * 目录: ${HOME}/.saturn/executing/[executorName]/[jobName]/[jobItem]/PID
+	 * 作业执行的Pid文件 <p> 目录: ${HOME}/.saturn/executing/[executorName]/[jobName]/[jobItem]/PID
 	 */
 	public static final String JOBITEMPIDSPATH = EXECUTINGJOBPATH + FILESEPARATOR + "%s" + FILESEPARATOR + "PIDS";
 	public static final String JOBITEMPATH = EXECUTINGJOBPATH + FILESEPARATOR + "%s";
 
-	public static final String JOBITEMPIDPATH2 = EXECUTINGJOBPATH + FILESEPARATOR + "%s" + FILESEPARATOR + "PIDS"
-			+ FILESEPARATOR + "%s";
+	public static final String JOBITEMPIDPATH2 =
+			EXECUTINGJOBPATH + FILESEPARATOR + "%s" + FILESEPARATOR + "PIDS" + FILESEPARATOR + "%s";
 
 	/**
-	 * Shell作业执行的回写结果路径文件
-	 * <p>
-	 * 目录: ${HOME}/.saturn/output/[executorName]/[jobName]/[jobItem]/[randomId/messageId]/[timestamp]
+	 * Shell作业执行的回写结果路径文件 <p> 目录: ${HOME}/.saturn/output/[executorName]/[jobName]/[jobItem]/[randomId/messageId
+	 * ]/[timestamp]
 	 */
-	public static final String JOBITEMOUTPUTPATH = OUTPUT_PATH + FILESEPARATOR + "%s" + FILESEPARATOR + "%s"
-			+ FILESEPARATOR + "%s" + FILESEPARATOR + "%s" + FILESEPARATOR + "%s";
+	public static final String JOBITEMOUTPUTPATH =
+			OUTPUT_PATH + FILESEPARATOR + "%s" + FILESEPARATOR + "%s" + FILESEPARATOR + "%s" + FILESEPARATOR + "%s"
+					+ FILESEPARATOR + "%s";
 
 	private static final String CHECK_RUNNING_JOB_THREAD_NAME = "check-if-job-%s-done";
 
 	/**
 	 * 获取当前Saturn的执行目录(executing)
+	 *
 	 * @return Saturn的执行目录
 	 */
 	public static File getSaturnExecutingHome() {
@@ -96,7 +92,7 @@ public class ScriptPidUtils {
 		try {
 			FileUtils.forceMkdir(executingHome);
 		} catch (Exception ex) {
-			log.error("msg=Creating directory error", ex);
+			LogUtils.error(log, LogEvents.ExecutorEvent.COMMON, "Creating directory error", ex);
 		}
 
 		if (executingHome.exists() && executingHome.isDirectory()) {
@@ -108,6 +104,7 @@ public class ScriptPidUtils {
 
 	/**
 	 * 写入对应的作业分片的pid文件
+	 *
 	 * @param executorName Executor name
 	 * @param jobName 作业名字
 	 * @param jobItem 作业分片
@@ -121,16 +118,12 @@ public class ScriptPidUtils {
 			File itemFile = new File(path);
 			FileUtils.writeStringToFile(itemFile, String.valueOf(pid));
 		} catch (IOException e) {
-			log.error(String.format(SaturnConstant.ERROR_LOG_FORMAT, jobName, "Writing the pid file error"), e);
+			LogUtils.error(log, jobName, "Writing the pid file error", e);
 		}
 	}
 
 	/**
-	 * 仅用于兼容旧版，获取 PID
-	 * @param executorName
-	 * @param jobName
-	 * @param jobItem
-	 * @return
+	 * @deprecated 仅用于兼容旧版，获取 PID
 	 */
 	@Deprecated
 	public static long _getPidFromFile(String executorName, String jobName, String jobItem) {
@@ -145,11 +138,11 @@ public class ScriptPidUtils {
 			try {
 				return Long.parseLong(pid);
 			} catch (NumberFormatException e) {
-				log.error(String.format(SaturnConstant.ERROR_LOG_FORMAT, jobName, "Parsing the pid file error"), e);
+				LogUtils.error(log, jobName, "Parsing the pid file error", e);
 				return UNKNOWN_PID;
 			}
 		} catch (IOException e) {
-			log.error(String.format(SaturnConstant.ERROR_LOG_FORMAT, jobName, "Reading the pid file error"), e);
+			LogUtils.error(log, jobName, "Reading the pid file error", e);
 			return UNKNOWN_PID;
 		}
 	}
@@ -164,6 +157,7 @@ public class ScriptPidUtils {
 
 	/**
 	 * 获取对应作业分片的pid, -1表示不存在或读取出错
+	 *
 	 * @param executorName Executor Name
 	 * @param jobName 作业名
 	 * @param jobItem 作业分片
@@ -191,9 +185,9 @@ public class ScriptPidUtils {
 
 		for (File file : files) {
 			try {
-				pids.add(Long.parseLong(file.getName()));
+				pids.add(Long.valueOf(file.getName()));
 			} catch (Exception e) {
-				log.error(String.format(SaturnConstant.ERROR_LOG_FORMAT, jobName, "Parsing the pid file error"), e);
+				LogUtils.error(log, jobName, "Parsing the pid file error", e);
 			}
 		}
 
@@ -202,6 +196,7 @@ public class ScriptPidUtils {
 
 	/**
 	 * 获取对应作业的分片pid文件列表
+	 *
 	 * @param executorName Executor Name
 	 * @param jobName 作业名
 	 * @return pid文件列表
@@ -216,7 +211,7 @@ public class ScriptPidUtils {
 		File[] files = jobNameFile.listFiles();
 
 		if (files == null || files.length == 0) {
-			return new String[] {};
+			return new String[]{};
 		}
 
 		String[] filePaths = new String[files.length];
@@ -231,6 +226,7 @@ public class ScriptPidUtils {
 
 	/**
 	 * 删除作业分片的全部pid文件
+	 *
 	 * @param executorName Executor Name
 	 * @param jobName 作业名
 	 * @param jobItem 作业分片
@@ -246,7 +242,7 @@ public class ScriptPidUtils {
 		try {
 			FileUtils.forceDelete(itemFile);
 		} catch (IOException e) {
-			log.error(e.getMessage(), e);
+			LogUtils.error(log, jobName, e.getMessage(), e);
 		}
 		return true;
 	}
@@ -261,7 +257,7 @@ public class ScriptPidUtils {
 		try {
 			FileUtils.forceDelete(itemFile);
 		} catch (IOException e) {
-			log.error(e.getMessage(), e);
+			LogUtils.error(log, jobName, e.getMessage(), e);
 		}
 		return true;
 	}
@@ -272,9 +268,10 @@ public class ScriptPidUtils {
 
 	/**
 	 * This method will kill all the child/grandchild/... processes.
+	 *
 	 * @param pid pid to kill.
 	 */
-	public static void killAllChildrenByPid(long pid, boolean force) throws InterruptedException {
+	public static void killAllChildrenByPid(long pid, boolean force) {
 		if (pid <= UNKNOWN_PID) {
 			return;
 		}
@@ -284,7 +281,7 @@ public class ScriptPidUtils {
 		while (null != (pidStr = exeCmdWithoutPipe(CommandLine.parse("pgrep -P " + pidStr), null, null))) {
 			String[] pids = pidStr.split(System.getProperty("line.separator"));
 			for (int i = 0; i < pids.length; i++) {
-				pidList.add(pids[i]);// NOSONAR
+				pidList.add(pids[i]);
 			}
 			pidStr = StringUtils.join(pids, ",");
 		}
@@ -334,9 +331,10 @@ public class ScriptPidUtils {
 		executor.setExitValue(0);
 		try {
 			ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-			ByteArrayOutputStream errorStream = new ByteArrayOutputStream();
-			PumpStreamHandler streamHandler = new PumpStreamHandler(outputStream, errorStream, input);
+			SaturnLogOutputStream errorOS = new SaturnLogOutputStream(log, SaturnLogOutputStream.LEVEL_ERROR);
+			PumpStreamHandler streamHandler = new PumpStreamHandler(outputStream, errorOS, input);
 			executor.setStreamHandler(streamHandler);
+			LogUtils.info(log, LogEvents.ExecutorEvent.COMMON, "exec command: {}", cmdLine);
 			int value = executor.execute(cmdLine, env);
 			if (value == 0) {
 				String out = outputStream.toString();
@@ -345,17 +343,17 @@ public class ScriptPidUtils {
 				return null;
 			}
 		} catch (Exception e) {
-			log.error("msg=" + e.getMessage(), e);
+			LogUtils.error(log, LogEvents.ExecutorEvent.COMMON, e.getMessage(), e);
 			return null;
 		}
 	}
 
 	/**
 	 * 检查是否已经已有作业名重复运行
-	 * @param zkJobNames 作业名列表
 	 */
-	public static void checkAllExistJobs(final CoordinatorRegistryCenter regCenter, final List<String> zkJobNames) {
-		if (zkJobNames == null || zkJobNames.size() == 0) {
+	public static void checkAllExistJobs(final CoordinatorRegistryCenter regCenter) {
+		List<String> zkJobNames = regCenter.getChildrenKeys(JobNodePath.ROOT);
+		if (zkJobNames == null || zkJobNames.isEmpty()) {
 			return;
 		}
 		for (final String jobName : zkJobNames) {
@@ -365,8 +363,8 @@ public class ScriptPidUtils {
 
 	public static void forceStopRunningShellJob(final String executorName, final String jobName) {
 		String[] itemPaths = ScriptPidUtils.getItemsPaths(executorName, jobName);
-		if (itemPaths == null || itemPaths.length == 0) {
-			log.info("[{}] msg={} no pids to kill", jobName, jobName);
+		if (itemPaths.length == 0) {
+			LogUtils.info(log, jobName, "{} no pids to kill", jobName);
 			return;
 		}
 		for (String path : itemPaths) {
@@ -376,11 +374,7 @@ public class ScriptPidUtils {
 			List<Long> pids = ScriptPidUtils.getPidsFromFile(executorName, jobName, "" + Integer.toString(jobItem));
 			for (Long pid : pids) {
 				if (pid > 0 && ScriptPidUtils.isPidRunning("" + pid)) {
-					try {
-						ScriptPidUtils.killAllChildrenByPid(pid, true);
-					} catch (InterruptedException e) {
-						log.error(String.format(SaturnConstant.ERROR_LOG_FORMAT, jobName, e.getMessage()), e);
-					}
+					ScriptPidUtils.killAllChildrenByPid(pid, true);
 				}
 			}
 
@@ -392,25 +386,27 @@ public class ScriptPidUtils {
 		final String executorName = regCenter.getExecutorName();
 
 		String[] itemPaths = ScriptPidUtils.getItemsPaths(executorName, jobName);
-		if (itemPaths == null || itemPaths.length == 0) {
+		if (itemPaths.length == 0) {
 			return;
 		}
 		String jobTypePath = JobNodePath.getNodeFullPath(jobName, ConfigurationNode.JOB_TYPE);
 		String jobType = regCenter.get(jobTypePath);
-		if (!"SHELL_JOB".equals(jobType)) {
-			log.info("{} is not shell job ,igore checking ", jobName);
+		// 只检查Shell作业
+		JobType jobTypeObj = JobTypeManager.get(jobType);
+		if (jobTypeObj == null || !jobTypeObj.isShell()) {
+			LogUtils.info(log, jobName, "{} is not shell job, ignore checking ", jobName);
 			return;
 		}
 		String enabledPath = JobNodePath.getNodeFullPath(jobName, ConfigurationNode.ENABLED);
 		String isEnabledStr = regCenter.get(enabledPath);
-		log.info("[{}] msg={} pidFromFile size :{};isEnabledStr:{}", jobName, jobName, itemPaths.length, isEnabledStr);
+		LogUtils.info(log, jobName, "{} pidFromFile size :{};isEnabledStr:{}", jobName, itemPaths.length, isEnabledStr);
 
 		// null means new job, if there are pid files, kill -9.
 		// if it's true, means it's an enabled job, there shouldn't exist the pid files. kill them with no mercy.
 		if ("true".equals(isEnabledStr) || isEnabledStr == null) {
 			killRunningShellProcess(executorName, jobName, itemPaths);
 		} else {
-			// if there are other executors, failover will occure. This executor only has to kill the pids.
+			// if there are other executors, failover will occur. This executor only has to kill the pids.
 			if (areThereOtherExecutorsRunningTheShards(regCenter, jobName)) {
 				killRunningShellProcess(executorName, jobName, itemPaths);
 			} else {
@@ -421,20 +417,21 @@ public class ScriptPidUtils {
 				for (String path : itemPaths) {
 					String itemStr = StringUtils.substringAfterLast(path, File.separator);
 					int jobItem = Integer.parseInt(itemStr);
-					long pid = ScriptPidUtils.getFirstPidFromFile(executorName, jobName,
-							"" + Integer.toString(jobItem));
+					long pid = ScriptPidUtils
+							.getFirstPidFromFile(executorName, jobName, "" + Integer.toString(jobItem));
 					if (pid > 0 && ScriptPidUtils.isPidRunning("" + Long.toString(pid))) {
 						String runningPath = JobNodePath.getNodeFullPath(jobName,
-								String.format(ExecutionNode.RUNNING, Integer.parseInt(itemStr)));
+								String.format(ExecutionNode.RUNNING, Integer.valueOf(itemStr)));
 						regCenter.persistEphemeral(runningPath, "");
-						log.info("[{}] msg={}-{} restores running status, path={}", jobName, jobName, path,
+						LogUtils.info(log, jobName, "{}-{} restores running status, path={}", jobName, path,
 								runningPath);
-						System.out.println(jobName + "-" + path + " restores running status, path=" + runningPath);// NOSONAR
+						System.out.println(
+								jobName + "-" + path + " restores running status, path=" + runningPath);// NOSONAR
 						shardItems.add(itemStr);
-						log.info("[{}] msg={}-{} is running, pid={}", jobName, jobName, path, pid);
+						LogUtils.info(log, jobName, "{}-{} is running, pid={}", jobName, path, pid);
 					} else {
 						ScriptPidUtils.removeAllPidFile(executorName, jobName, itemStr);
-						log.info("[{}] msg={}-{} is not running, pid={}", jobName, jobName, path, pid);
+						LogUtils.info(log, jobName, "{}-{} is not running, pid={}", jobName, path, pid);
 					}
 				}
 
@@ -442,63 +439,64 @@ public class ScriptPidUtils {
 					return;
 				}
 
-				// start a thread to check if shell process is done, if yes, remove pid file -> add completed -> clear
-				// running
-				new Thread(new Runnable() {
-					@Override
-					public void run() {
-						while (!Thread.interrupted()) {
-							try {
-								TimeUnit.MILLISECONDS.sleep(500);
-							} catch (InterruptedException e) {
-							}
-
-							boolean finished = true;
-							for (String shardItem : shardItems) {
-								long pid = ScriptPidUtils.getFirstPidFromFile(executorName, jobName, shardItem);
-								if (pid > 0 && ScriptPidUtils.isPidRunning("" + Long.toString(pid))) {
-									finished = false;
-									continue;
-								} else {
-									// remove pid file -> add completed -> clear running
-									// make sure u have added completed node before remove running node. otherwise
-									// failover will triggered.
-									ScriptPidUtils.removeAllPidFile(executorName, jobName, shardItem);
-									String completedPath = JobNodePath.getNodeFullPath(jobName,
-											String.format(ExecutionNode.COMPLETED, shardItem));
-									regCenter.persist(completedPath, "");
-									String runningPath = JobNodePath.getNodeFullPath(jobName,
-											String.format(ExecutionNode.RUNNING, shardItem));
-									regCenter.remove(runningPath);
-									log.info("[{}] msg={} - {} is done, write complete node path {}", jobName, jobName,
-											shardItem, completedPath);
-									System.out.println(jobName + "-" + shardItem + " is done.");// NOSONAR
-								}
-							}
-							if (finished) {
-								log.info("[{}] msg=all running shell processes are done. now quit the thread.");
-								System.out.println("all running shell processes are done. now quit the thread.");// NOSONAR
-								break;
-							}
-						}
-					}
-				}, String.format(CHECK_RUNNING_JOB_THREAD_NAME, jobName)).start();
+				asyncCheckShellProcessIsDone(regCenter, jobName, executorName, shardItems);
 			}
 		}
 	}
 
+	private static void asyncCheckShellProcessIsDone(final CoordinatorRegistryCenter regCenter, final String jobName,
+			final String executorName, final List<String> shardItems) {
+		// start a thread to check if shell process is done, if yes, remove pid file -> add completed -> clear
+		// running
+		new Thread(new Runnable() {
+			@Override
+			public void run() {
+				while (!Thread.interrupted()) {
+					try {
+						TimeUnit.MILLISECONDS.sleep(500);
+					} catch (InterruptedException ignore) {
+						LogUtils.warn(log, jobName, ignore.getMessage());
+					}
+
+					boolean finished = true;
+					for (String shardItem : shardItems) {
+						long pid = ScriptPidUtils.getFirstPidFromFile(executorName, jobName, shardItem);
+						if (pid > 0 && ScriptPidUtils.isPidRunning("" + Long.toString(pid))) {
+							finished = false;
+							continue;
+						} else {
+							// remove pid file -> add completed -> clear running
+							// make sure u have added completed node before remove running node. otherwise
+							// failover will triggered.
+							ScriptPidUtils.removeAllPidFile(executorName, jobName, shardItem);
+							String completedPath = JobNodePath
+									.getNodeFullPath(jobName, String.format(ExecutionNode.COMPLETED, shardItem));
+							regCenter.persist(completedPath, "");
+							String runningPath = JobNodePath
+									.getNodeFullPath(jobName, String.format(ExecutionNode.RUNNING, shardItem));
+							regCenter.remove(runningPath);
+							LogUtils.info(log, jobName, "{} - {} is done, write complete node path {}", jobName,
+									shardItem, completedPath);
+							System.out.println(jobName + "-" + shardItem + " is done.");// NOSONAR
+						}
+					}
+					if (finished) {
+						LogUtils.info(log, jobName, "all running shell processes are done. now quit the thread.");
+						System.out.println("all running shell processes are done. now quit the thread.");// NOSONAR
+						break;
+					}
+				}
+			}
+		}, String.format(CHECK_RUNNING_JOB_THREAD_NAME, jobName)).start();
+	}
+
 	private static void killRunningShellProcess(String executorName, String jobName, String[] itemPaths) {
 		for (String path : itemPaths) {
-			Integer item = Integer.parseInt(StringUtils.substringAfterLast(path, File.separator));
+			Integer item = Integer.valueOf(StringUtils.substringAfterLast(path, File.separator));
 			long pid = ScriptPidUtils.getFirstPidFromFile(executorName, jobName, "" + item);
-			System.out.println("pid found for jobName:" + jobName + " executorName:" + executorName + ", kill -9 " + pid);// NOSONAR
-			try {
-				killAllChildrenByPid(pid, true);
-			} catch (InterruptedException e) {
-				log.error(
-						String.format(SaturnConstant.ERROR_LOG_FORMAT, jobName, "killRunningShellProcess interrupted:"),
-						e);
-			}
+			System.out.println("pid found for jobName:" + jobName + " executorName:" + executorName + ", kill -9 "
+					+ pid);// NOSONAR
+			killAllChildrenByPid(pid, true);
 			ScriptPidUtils.removeAllPidFile(executorName, jobName, item);
 		}
 
@@ -529,11 +527,13 @@ public class ScriptPidUtils {
 	 */
 
 	public static boolean isPidRunning(long pid) {
+		// not support mac os
 		String path = "/proc/" + pid;
 		return new File(path).exists();
 	}
 
 	public static boolean isPidRunning(String pid) {
+		// not support mac os
 		String path = "/proc/" + pid;
 		return new File(path).exists();
 	}
@@ -550,11 +550,9 @@ public class ScriptPidUtils {
 			} else if (kvs.length > 2) {
 				map.put(kvs[0], oneLine.replace(kvs[0] + "=", ""));
 				lastKey = kvs[0];
-			} else if (kvs.length == 1) {
-				if (StringUtils.isNotBlank(lastKey)) {
-					String lastValue = map.get(lastKey);
-					map.put(lastKey, lastValue + kvs[0]);
-				}
+			} else if (kvs.length == 1 && StringUtils.isNotBlank(lastKey)) {
+				String lastValue = map.get(lastKey);
+				map.put(lastKey, lastValue + kvs[0]);
 			}
 		}
 		return map;
@@ -564,14 +562,14 @@ public class ScriptPidUtils {
 		Map<String, String> env = new HashMap<>();
 		try {
 			final CommandLine cmdLine = new CommandLine("/bin/sh");
-			cmdLine.addArguments(new String[] { "-c", "source /etc/profile && env" }, false);
+			cmdLine.addArguments(new String[]{"-c", "source /etc/profile && env"}, false);
 			String output = exeCmdWithoutPipe(cmdLine, null, null);
 			if (output == null) {
 				return env;
 			}
 			env = parseString2Map(output);
 		} catch (Exception e) {
-			log.error("msg=" + e.getMessage(), e);
+			LogUtils.error(log, LogEvents.ExecutorEvent.COMMON, e.getMessage(), e);
 		}
 		return env;
 	}
@@ -580,7 +578,7 @@ public class ScriptPidUtils {
 		String patternString = "\\$\\{?(" + StringUtils.join(env.keySet(), "|") + ")\\}?";
 		Pattern pattern = Pattern.compile(patternString);
 		Matcher matcher = pattern.matcher(cmd);
-		StringBuffer sb = new StringBuffer();// NOSONAR
+		StringBuffer sb = new StringBuffer();
 		while (matcher.find()) {
 			matcher.appendReplacement(sb, env.get(matcher.group(1)));
 		}

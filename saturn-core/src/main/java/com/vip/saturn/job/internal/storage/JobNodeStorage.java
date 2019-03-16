@@ -3,9 +3,9 @@
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
@@ -13,15 +13,6 @@
  */
 
 package com.vip.saturn.job.internal.storage;
-
-import java.util.List;
-import java.util.concurrent.TimeUnit;
-
-import org.apache.curator.framework.CuratorFramework;
-import org.apache.curator.framework.api.transaction.CuratorTransactionFinal;
-import org.apache.curator.framework.recipes.leader.LeaderLatch;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.vip.saturn.job.basic.SaturnConstant;
 import com.vip.saturn.job.exception.JobException;
@@ -32,18 +23,30 @@ import com.vip.saturn.job.reg.exception.RegExceptionHandler;
 import com.vip.saturn.job.reg.zookeeper.ZookeeperConfiguration;
 import com.vip.saturn.job.reg.zookeeper.ZookeeperRegistryCenter;
 import com.vip.saturn.job.utils.BlockUtils;
+import com.vip.saturn.job.utils.LogUtils;
+import org.apache.curator.framework.CuratorFramework;
+import org.apache.curator.framework.api.transaction.CuratorTransactionFinal;
+import org.apache.curator.framework.recipes.leader.LeaderLatch;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 作业节点数据访问类.
- * 
+ *
  * <p>
  * 作业节点是在普通的节点前加上作业名称的前缀.
  * </p>
- * 
- * 
+ *
+ *
  */
 public class JobNodeStorage {
-	static Logger log = LoggerFactory.getLogger(JobNodeStorage.class);
+
+	private static Logger log = LoggerFactory.getLogger(JobNodeStorage.class);
+
+	private static final int MAX_DELETE_RETRY_TIMES = 10;
 
 	private final CoordinatorRegistryCenter coordinatorRegistryCenter;
 
@@ -65,7 +68,7 @@ public class JobNodeStorage {
 
 	/**
 	 * 判断作业节点是否存在.
-	 * 
+	 *
 	 * @param node 作业节点名称
 	 * @return 作业节点是否存在
 	 */
@@ -75,7 +78,7 @@ public class JobNodeStorage {
 
 	/**
 	 * 判断作业是否存在.
-	 * 
+	 *
 	 * @param jobName 作业节点名称
 	 * @return 作业是否存在
 	 */
@@ -85,7 +88,7 @@ public class JobNodeStorage {
 
 	/**
 	 * 获取作业节点数据.
-	 * 
+	 *
 	 * @param node 作业节点名称
 	 * @return 作业节点数据值
 	 */
@@ -95,7 +98,7 @@ public class JobNodeStorage {
 
 	/**
 	 * 直接从注册中心而非本地缓存获取作业节点数据.
-	 * 
+	 *
 	 * @param node 作业节点名称
 	 * @return 作业节点数据值
 	 */
@@ -105,7 +108,7 @@ public class JobNodeStorage {
 
 	/**
 	 * 直接从注册中心而非本地缓存获取作业节点数据.可用于相同namespace下的其他作业。
-	 * 
+	 *
 	 * @param jobName 作业名
 	 * @param node 作业节点名称
 	 * @return 作业节点数据值
@@ -116,7 +119,7 @@ public class JobNodeStorage {
 
 	/**
 	 * 获取作业节点子节点名称列表.
-	 * 
+	 *
 	 * @param node 作业节点名称
 	 * @return 作业节点子节点名称列表
 	 */
@@ -127,7 +130,7 @@ public class JobNodeStorage {
 
 	/**
 	 * 如果不存在则创建作业节点.
-	 * 
+	 *
 	 * @param node 作业节点名称
 	 */
 	public void createJobNodeIfNeeded(final String node) {
@@ -143,8 +146,8 @@ public class JobNodeStorage {
 	}
 
 	/**
-	 * 删除作业节点.
-	 * 
+	 * 如果节点存在，则删除作业节点
+	 *
 	 * @param node 作业节点名称
 	 */
 	public void removeJobNodeIfExisted(final String node) {
@@ -154,47 +157,57 @@ public class JobNodeStorage {
 	}
 
 	/**
+	 * 删除作业节点
+	 *
+	 * @param node 作业节点名称
+	 */
+	public void removeJobNode(final String node) {
+		coordinatorRegistryCenter.remove(JobNodePath.getNodeFullPath(jobConfiguration.getJobName(), node));
+	}
+
+
+	/**
 	 * 如果节点不存在或允许覆盖则填充节点数据.
-	 * 
+	 *
 	 * @param node 作业节点名称
 	 * @param value 作业节点数据值
 	 */
 	public void fillJobNodeIfNullOrOverwrite(final String node, final Object value) {
 		if (null == value) {
-			log.info("[{}] msg=job node value is null, node:{}", jobName, node);
+			LogUtils.info(log, jobName, "job node value is null, node:{}", node);
 			return;
 		}
 		if (!isJobNodeExisted(node) || (!value.toString().equals(getJobNodeDataDirectly(node)))) {
-			coordinatorRegistryCenter.persist(JobNodePath.getNodeFullPath(jobConfiguration.getJobName(), node),
-					value.toString());
+			coordinatorRegistryCenter
+					.persist(JobNodePath.getNodeFullPath(jobConfiguration.getJobName(), node), value.toString());
 		}
 	}
 
 	/**
 	 * 填充临时节点数据.
-	 * 
+	 *
 	 * @param node 作业节点名称
 	 * @param value 作业节点数据值
 	 */
 	public void fillEphemeralJobNode(final String node, final Object value) {
-		coordinatorRegistryCenter.persistEphemeral(JobNodePath.getNodeFullPath(jobConfiguration.getJobName(), node),
-				value.toString());
+		coordinatorRegistryCenter
+				.persistEphemeral(JobNodePath.getNodeFullPath(jobConfiguration.getJobName(), node), value.toString());
 	}
 
 	/**
 	 * 更新节点数据.
-	 * 
+	 *
 	 * @param node 作业节点名称
 	 * @param value 作业节点数据值
 	 */
 	public void updateJobNode(final String node, final Object value) {
-		coordinatorRegistryCenter.update(JobNodePath.getNodeFullPath(jobConfiguration.getJobName(), node),
-				value.toString());
+		coordinatorRegistryCenter
+				.update(JobNodePath.getNodeFullPath(jobConfiguration.getJobName(), node), value.toString());
 	}
 
 	/**
 	 * 跟新作业节点数据。可用于同一个namespace下的其他作业。
-	 * 
+	 *
 	 * @param jobName 作业名
 	 * @param node 作业节点名称
 	 * @param value 待替换的数据
@@ -205,18 +218,18 @@ public class JobNodeStorage {
 
 	/**
 	 * 替换作业节点数据.
-	 * 
+	 *
 	 * @param node 作业节点名称
 	 * @param value 待替换的数据
 	 */
 	public void replaceJobNode(final String node, final Object value) {
-		coordinatorRegistryCenter.persist(JobNodePath.getNodeFullPath(jobConfiguration.getJobName(), node),
-				value.toString());
+		coordinatorRegistryCenter
+				.persist(JobNodePath.getNodeFullPath(jobConfiguration.getJobName(), node), value.toString());
 	}
 
 	/**
 	 * 替换作业节点数据.
-	 * 
+	 *
 	 * @param jobName 作业名
 	 * @param node 作业节点名称
 	 * @param value 待替换的数据
@@ -227,7 +240,7 @@ public class JobNodeStorage {
 
 	/**
 	 * 在事务中执行操作.
-	 * 
+	 *
 	 * @param callback 执行操作的回调
 	 */
 	public void executeInTransaction(final TransactionExecutionCallback callback) {
@@ -244,7 +257,7 @@ public class JobNodeStorage {
 
 	/**
 	 * 在主节点执行操作.
-	 * 
+	 *
 	 * @param latchNode 分布式锁使用的作业节点名称
 	 * @param callback 执行操作的回调
 	 */
@@ -256,7 +269,7 @@ public class JobNodeStorage {
 			callback.execute();
 			// CHECKSTYLE:OFF
 		} catch (final Exception e) {
-			log.error(String.format(SaturnConstant.ERROR_LOG_FORMAT, jobName, e.getMessage()), e);
+			LogUtils.error(log, jobName, e.getMessage(), e);
 			// CHECKSTYLE:ON
 			if (e instanceof InterruptedException) {// NOSONAR
 				Thread.currentThread().interrupt();
@@ -280,7 +293,7 @@ public class JobNodeStorage {
 			}
 			// CHECKSTYLE:OFF
 		} catch (final Exception e) {
-			log.error(String.format(SaturnConstant.ERROR_LOG_FORMAT, jobName, e.getMessage()), e);
+			LogUtils.error(log, jobName, e.getMessage(), e);
 			// CHECKSTYLE:ON
 			if (e instanceof InterruptedException) {// NOSONAR
 				Thread.currentThread().interrupt();
@@ -309,29 +322,37 @@ public class JobNodeStorage {
 	public void deleteJobNode() {
 		ZookeeperConfiguration zkConfig = ((ZookeeperRegistryCenter) coordinatorRegistryCenter).getZkConfig();
 		ZookeeperRegistryCenter newZk = new ZookeeperRegistryCenter(zkConfig);
-		newZk.init();
 		try {
+			newZk.init(); // maybe throw RuntimeException
 			newZk.remove(ServerNode.getServerNode(jobName, executorName));
-			for (int i = 0; i < 10; i++) {
+			for (int i = 0; i < MAX_DELETE_RETRY_TIMES; i++) {
 				String fullPath = JobNodePath.getJobNameFullPath(jobConfiguration.getJobName());
-				if (newZk.isExisted(fullPath)) {
-					List<String> servers = newZk.getChildrenKeys(ServerNode.getServerRoot(jobName));
-					if (servers == null || servers.isEmpty()) {
-						try {
-							newZk.remove(fullPath);
-							return;
-						} catch (Exception e) {
-							log.error(String.format(SaturnConstant.ERROR_LOG_FORMAT, jobName, e.getMessage()), e);
-						}
-					}
-					BlockUtils.waitingShortTime();
-				} else {
+				if (!newZk.isExisted(fullPath)) {
 					return;
 				}
+				List<String> servers = newZk.getChildrenKeys(ServerNode.getServerRoot(jobName));
+				if (servers == null || servers.isEmpty()) {
+					if (tryToRemoveNode(newZk, fullPath)) {
+						return;
+					}
+				}
+				BlockUtils.waitingShortTime();
 			}
+		} catch (Throwable t) {
+			LogUtils.error(log, jobName, "delete job node error", t);
 		} finally {
 			newZk.close();
 		}
+	}
+
+	private boolean tryToRemoveNode(ZookeeperRegistryCenter newZk, String fullPath) {
+		try {
+			newZk.remove(fullPath);
+			return true;
+		} catch (Exception e) {
+			LogUtils.error(log, jobName, e.getMessage(), e);
+		}
+		return false;
 	}
 
 	public boolean isConnected() {

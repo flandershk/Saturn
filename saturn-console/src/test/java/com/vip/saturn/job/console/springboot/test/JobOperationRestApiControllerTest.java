@@ -12,9 +12,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.io.UnsupportedEncodingException;
 import java.util.Map;
 
+import com.vip.saturn.job.console.service.ZkTreeService;
 import org.assertj.core.util.Maps;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -30,7 +30,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import com.alibaba.fastjson.JSONObject;
 import com.google.gson.Gson;
 import com.vip.saturn.job.console.AbstractSaturnConsoleTest;
-import com.vip.saturn.job.console.controller.JobOperationRestApiController;
+import com.vip.saturn.job.console.controller.rest.JobOperationRestApiController;
 import com.vip.saturn.job.console.domain.JobConfig;
 import com.vip.saturn.job.console.domain.RestApiJobConfig;
 import com.vip.saturn.job.console.domain.RestApiJobInfo;
@@ -51,6 +51,9 @@ public class JobOperationRestApiControllerTest extends AbstractSaturnConsoleTest
 
 	@MockBean
 	private RestApiService restApiService;
+
+	@MockBean
+	private ZkTreeService zkTreeService;
 
 	@Test
 	public void testCreateSuccessfully() throws Exception {
@@ -96,10 +99,11 @@ public class JobOperationRestApiControllerTest extends AbstractSaturnConsoleTest
 	@Test
 	public void testCreateFailAsSaturnJobExceptionThrows() throws Exception {
 		String customErrMsg = "some exception throws";
-		willThrow(new SaturnJobConsoleException(customErrMsg)).given(restApiService).createJob(any(String.class),
+		willThrow(new SaturnJobConsoleException(SaturnJobConsoleException.ERROR_CODE_INTERNAL_ERROR, customErrMsg)).given(restApiService)
+				.createJob(any(String.class),
 				any(JobConfig.class));
 
-		JobEntity jobEntity = constructJobEntity("job1");
+		JobEntity jobEntity = constructJobEntity("job12345");
 		MvcResult result = mvc.perform(
 				post("/rest/v1/domain/jobs").contentType(MediaType.APPLICATION_JSON).content(jobEntity.toJSON()))
 				.andExpect(status().isInternalServerError()).andReturn();
@@ -109,7 +113,8 @@ public class JobOperationRestApiControllerTest extends AbstractSaturnConsoleTest
 
 		// Created
 		customErrMsg = "jobname does not exists";
-		willThrow(new SaturnJobConsoleException(customErrMsg)).given(restApiService).createJob(any(String.class),
+		willThrow(new SaturnJobConsoleException(SaturnJobConsoleException.ERROR_CODE_NOT_EXISTED, customErrMsg)).given(restApiService)
+				.createJob(any(String.class),
 				any(JobConfig.class));
 
 		result = mvc.perform(
@@ -166,6 +171,20 @@ public class JobOperationRestApiControllerTest extends AbstractSaturnConsoleTest
 	}
 
 	@Test
+	public void testCreateFailAsJobAlreadyExisted() throws Exception {
+		JobEntity jobEntity = constructJobEntity("job2");
+		String errMsg = "该作业(job2)已经存在";
+		willThrow(new SaturnJobConsoleException(SaturnJobConsoleException.ERROR_CODE_BAD_REQUEST, errMsg)).given(restApiService)
+				.createJob(any(String.class), any(JobConfig.class));
+
+		MvcResult result = mvc.perform(post("/rest/v1/domain/jobs").contentType(MediaType.APPLICATION_JSON).content(jobEntity.toJSON()))
+				.andExpect(status().isBadRequest()).andReturn();
+
+		String message = fetchErrorMessage(result);
+		assertEquals("error message not equal", "该作业(job2)已经存在", message);
+	}
+
+	@Test
 	public void testQuerySuccessfully() throws Exception {
 		String jobName = "job1";
 
@@ -217,10 +236,6 @@ public class JobOperationRestApiControllerTest extends AbstractSaturnConsoleTest
 				.andExpect(status().isNoContent()).andReturn();
 	}
 
-	private String fetchErrorMessage(MvcResult result) throws UnsupportedEncodingException {
-		return JSONObject.parseObject(result.getResponse().getContentAsString()).getString("message");
-	}
-
 	private RestApiJobInfo constructJobInfo(String domain, String jobName) {
 		RestApiJobInfo jobInfo = new RestApiJobInfo();
 		jobInfo.setJobName(jobName);
@@ -243,7 +258,6 @@ public class JobOperationRestApiControllerTest extends AbstractSaturnConsoleTest
 		JobConfig jobConfig = new JobConfig();
 
 		jobConfig.setJobName(jobEntity.getJobName());
-		jobConfig.setNamespace(namespace);
 		jobConfig.setCron((String) jobEntity.getConfig("cron"));
 		jobConfig.setJobType((String) jobEntity.getConfig("jobType"));
 		jobConfig.setShardingTotalCount((Integer) jobEntity.getConfig("shardingTotalCount"));
@@ -252,7 +266,6 @@ public class JobOperationRestApiControllerTest extends AbstractSaturnConsoleTest
 
 		jobConfig.setLocalMode(null);
 		jobConfig.setUseSerial(null);
-		jobConfig.setIsCopyJob(false);
 
 		return jobConfig;
 	}

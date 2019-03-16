@@ -1,59 +1,62 @@
-/**
- * 
- */
 package com.vip.saturn.job.trigger;
 
-import java.util.Date;
-import java.util.concurrent.atomic.AtomicBoolean;
-
-import org.quartz.SchedulerException;
+import com.vip.saturn.job.basic.AbstractElasticJob;
+import com.vip.saturn.job.exception.JobException;
+import com.vip.saturn.job.utils.LogEvents;
+import com.vip.saturn.job.utils.LogUtils;
 import org.quartz.Trigger;
 import org.quartz.spi.OperableTrigger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.vip.saturn.job.basic.AbstractElasticJob;
-import com.vip.saturn.job.basic.SaturnConstant;
+import java.util.Date;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * @author chembo.huang
- *
  */
 public class SaturnWorker implements Runnable {
-	static Logger log = LoggerFactory.getLogger(SaturnWorker.class);
 
-	private AbstractElasticJob job;
-	private volatile OperableTrigger triggerObj;
+	static Logger log = LoggerFactory.getLogger(SaturnWorker.class);
 	private final Object sigLock = new Object();
+	private final AbstractElasticJob job;
+	private final Triggered notTriggered;
+	private volatile OperableTrigger triggerObj;
 	private volatile boolean paused = false;
-	private volatile boolean triggered = false;
+	private volatile Triggered triggered;
 	private AtomicBoolean halted = new AtomicBoolean(false);
 
-	public SaturnWorker(AbstractElasticJob job, Trigger trigger) throws SchedulerException {
+	public SaturnWorker(AbstractElasticJob job, Triggered notTriggered, Trigger trigger) {
 		this.job = job;
+		this.notTriggered = notTriggered;
+		this.triggered = notTriggered;
 		initTrigger(trigger);
 	}
 
-	public void reInitTrigger(Trigger trigger) throws SchedulerException {
+	void reInitTrigger(Trigger trigger) {
 		initTrigger(trigger);
 		synchronized (sigLock) {
 			sigLock.notifyAll();
 		}
 	}
 
-	private void initTrigger(Trigger trigger) throws SchedulerException {
-		if (trigger == null)
+	private void initTrigger(Trigger trigger) {
+		if (trigger == null) {
 			return;
-
+		}
+		if (!(trigger instanceof OperableTrigger)) {
+			throw new JobException("the trigger should be the instance of OperableTrigger");
+		}
 		this.triggerObj = (OperableTrigger) trigger;
 		Date ft = this.triggerObj.computeFirstFireTime(null);
 		if (ft == null) {
-			log.warn("[{}] msg=Based on configured schedule, the given trigger '" + trigger.getKey()
-					+ "' will never fire.", job.getJobName());
+			LogUtils.warn(log, LogEvents.ExecutorEvent.COMMON,
+					"Based on configured schedule, the given trigger {} will never fire.", trigger.getKey(),
+					job.getJobName());
 		}
 	}
 
-	public boolean isShutDown() {
+	boolean isShutDown() {
 		return halted.get();
 	}
 
@@ -71,11 +74,23 @@ public class SaturnWorker implements Runnable {
 		}
 	}
 
-	void trigger() {
+	void trigger(Triggered triggered) {
 		synchronized (sigLock) {
-			triggered = true;
+			this.triggered = triggered == null ? notTriggered : triggered;
 			sigLock.notifyAll();
 		}
+	}
+
+	Date getNextFireTimePausePeriodEffected() {
+		if (triggerObj == null) {
+			return null;
+		}
+		triggerObj.updateAfterMisfire(null);
+		Date nextFireTime = triggerObj.getNextFireTime();
+		while (nextFireTime != null && job.getConfigService().isInPausePeriod(nextFireTime)) {
+			nextFireTime = triggerObj.getFireTimeAfter(nextFireTime);
+		}
+		return nextFireTime;
 	}
 
 	@Override
@@ -111,7 +126,7 @@ public class SaturnWorker implements Runnable {
 						if (halted.get()) {
 							break;
 						}
-						if (triggered) {
+						if (triggered.isYes()) {
 							break;
 						}
 
@@ -132,32 +147,34 @@ public class SaturnWorker implements Runnable {
 					}
 				}
 				boolean goAhead;
+				Triggered currentTriggered = notTriggered;
 				// 触发执行只有两个条件：1.时间到了 2.点立即执行
 				synchronized (sigLock) {
 					goAhead = !halted.get() && !paused;
-					// 重置立即执行标志；
-					if (triggered) {
-						triggered = false;
-					} else if(goAhead){ // 非立即执行。即，执行时间到了，或者没有下次执行时间
+					// 重置立即执行标志，赋值当前立即执行数据
+					if (triggered.isYes()) {
+						currentTriggered = triggered;
+						triggered = notTriggered;
+					} else if (goAhead) { // 非立即执行。即，执行时间到了，或者没有下次执行时间
 						goAhead = goAhead && !noFireTime; // 有下次执行时间，即执行时间到了，才执行作业
 						if (goAhead) { // 执行时间到了，更新执行时间
-							if(triggerObj != null) {
+							if (triggerObj != null) {
 								triggerObj.triggered(null);
 							}
 						} else { // 没有下次执行时间，则尝试睡一秒，防止不停的循环导致CPU使用率过高（如果cron不再改为周期性执行）
-                            try {
-                                sigLock.wait(1000L);
-                            } catch (InterruptedException ignore) {
-                            }
+							try {
+								sigLock.wait(1000L);
+							} catch (InterruptedException ignore) {
+							}
 						}
 					}
 				}
 				if (goAhead) {
-					job.execute();
+					job.execute(currentTriggered);
 				}
 
 			} catch (RuntimeException e) {
-				log.error(String.format(SaturnConstant.ERROR_LOG_FORMAT, job.getJobName(), e.getMessage()), e);
+				LogUtils.error(log, job.getJobName(), e.getMessage(), e);
 			}
 		}
 

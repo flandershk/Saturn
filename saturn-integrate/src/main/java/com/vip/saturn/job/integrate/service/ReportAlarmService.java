@@ -4,6 +4,7 @@ import com.vip.saturn.job.integrate.entity.AlarmInfo;
 import com.vip.saturn.job.integrate.exception.ReportAlarmException;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Report alarm service. Recommend use async thread to report, when it's heavy.
@@ -42,6 +43,13 @@ public interface ReportAlarmService {
 			throws ReportAlarmException;
 
 	/**
+	 * Dashboard refresh data, find the abnormal jobs
+	 * @param namespace The domain or namespace
+	 * @param jobList The job list
+	 */
+	void dashboardAbnormalBatchJobs(String namespace, List<Map<String, String>> jobList) throws ReportAlarmException;
+
+	/**
 	 * Dashboard refresh data, find that the job is timeout
 	 *
 	 * @param namespace The domain or namespace
@@ -73,5 +81,4 @@ public interface ReportAlarmService {
 	 */
 	void raise(String namespace, String jobName, String executorName, Integer shardItem, AlarmInfo alarmInfo)
 			throws ReportAlarmException;
-
 }

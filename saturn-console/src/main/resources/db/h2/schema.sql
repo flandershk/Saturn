@@ -224,3 +224,108 @@ CREATE TABLE `temporary_shared_status` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uniq_tss_status_key` (`status_key`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8;
+
+CREATE TABLE `user` (
+  `id` bigint(11) NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `user_name` varchar(255) NOT NULL DEFAULT '' COMMENT '用户名',
+  `password` varchar(255) NOT NULL DEFAULT '' COMMENT '用户密码',
+  `real_name` varchar(255) NOT NULL DEFAULT '' COMMENT '用户真实名字',
+  `employee_id` varchar(255) NOT NULL DEFAULT '' COMMENT '工号',
+  `email` varchar(255) NOT NULL DEFAULT '' COMMENT '邮箱',
+  `created_by` varchar(255) NOT NULL DEFAULT '' COMMENT '创建人',
+  `create_time` timestamp NOT NULL DEFAULT '1980-01-01 00:00:00' COMMENT '创建时间',
+  `last_updated_by` varchar(255) NOT NULL DEFAULT '' COMMENT '最近一次的更新人',
+  `last_update_time` timestamp NOT NULL DEFAULT '1980-01-01 00:00:00' COMMENT '最近一次的更新时间',
+  `is_deleted` tinyint(4) NOT NULL DEFAULT '0' COMMENT '是否删除：0，未删除；1，删除',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_user_user_name` (`user_name`),
+  KEY `idx_user_is_deleted` (`is_deleted`)
+  )ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8;
+
+CREATE TABLE `role` (
+  `id` bigint(11) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `role_key` varchar(255) NOT NULL DEFAULT '' COMMENT '角色标识',
+  `role_name` varchar(255) NOT NULL DEFAULT '' COMMENT '角色名',
+  `description` varchar(255) NOT NULL DEFAULT '' COMMENT '角色描述',
+  `created_by` varchar(255) NOT NULL DEFAULT '' COMMENT '创建人',
+  `create_time` timestamp NOT NULL DEFAULT '1980-01-01 00:00:00' COMMENT '创建时间',
+  `last_updated_by` varchar(255) NOT NULL DEFAULT '' COMMENT '最近一次的更新人',
+  `last_update_time` timestamp NOT NULL DEFAULT '1980-01-01 00:00:00'  COMMENT '最近一次的更新时间',
+  `is_deleted` tinyint(4) NOT NULL DEFAULT '0' COMMENT '是否删除：0，未删除；1，删除',
+PRIMARY KEY (`id`),
+UNIQUE KEY `uniq_role_role_key` (`role_key`),
+KEY `idx_role_is_deleted` (`is_deleted`)
+)ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8;
+
+CREATE TABLE `permission` (
+  `id` bigint(11) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `permission_key` varchar(255) NOT NULL DEFAULT '' COMMENT '权限标识',
+  `permission_name` varchar(255) NOT NULL DEFAULT '' COMMENT '权限名',
+  `description` varchar(255) NOT NULL DEFAULT '' COMMENT '权限描述',
+  `created_by` varchar(255) NOT NULL DEFAULT '' COMMENT '创建人',
+  `create_time` timestamp NOT NULL DEFAULT '1980-01-01 00:00:00' COMMENT '创建时间',
+  `last_updated_by` varchar(255) NOT NULL DEFAULT '' COMMENT '最近一次的更新人',
+  `last_update_time` timestamp NOT NULL DEFAULT '1980-01-01 00:00:00'  COMMENT '最近一次的更新时间',
+  `is_deleted` tinyint(4) NOT NULL DEFAULT '0' COMMENT '是否删除：0，未删除；1，删除',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_permission_permission_key` (`permission_key`),
+  KEY `idx_permission_is_deleted` (`is_deleted`)
+  )ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8;
+
+CREATE TABLE `user_role` (
+  `id` bigint(11) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `user_name` varchar(255) NOT NULL DEFAULT '' COMMENT '用户名',
+  `role_key` varchar(255) NOT NULL DEFAULT '' COMMENT '角色标识',
+  `namespace` varchar(255) NOT NULL DEFAULT '' COMMENT '域名',
+  `need_approval` tinyint(4) NOT NULL DEFAULT '1' COMMENT '是否需要审批：0，不需要审批；1，需要审批',
+  `created_by` varchar(255) NOT NULL DEFAULT '' COMMENT '创建人',
+  `create_time` timestamp NOT NULL DEFAULT '1980-01-01 00:00:00' COMMENT '创建时间',
+  `last_updated_by` varchar(255) NOT NULL DEFAULT '' COMMENT '最近一次的更新人',
+  `last_update_time` timestamp NOT NULL DEFAULT '1980-01-01 00:00:00'  COMMENT '最近一次的更新时间',
+  `is_deleted` tinyint(4) NOT NULL DEFAULT '0' COMMENT '是否删除：0，未删除；1，删除',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_user_role_key` (`user_name`, `role_key`, `namespace`),
+  KEY `idx_user_role_is_deleted` (`is_deleted`)
+  )ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8;
+
+CREATE TABLE `role_permission` (
+  `id` bigint(11) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `role_key` varchar(255) NOT NULL DEFAULT '' COMMENT '角色标识',
+  `permission_key` varchar(255) NOT NULL DEFAULT '' COMMENT '权限标识',
+  `created_by` varchar(255) NOT NULL DEFAULT '' COMMENT '创建人',
+  `create_time` timestamp NOT NULL DEFAULT '1980-01-01 00:00:00' COMMENT '创建时间',
+  `last_updated_by` varchar(255) NOT NULL DEFAULT '' COMMENT '最近一次的更新人',
+  `last_update_time` timestamp NOT NULL DEFAULT '1980-01-01 00:00:00'  COMMENT '最近一次的更新时间',
+  `is_deleted` tinyint(4) NOT NULL DEFAULT '0' COMMENT '是否删除：0，未删除；1，删除',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_user_permission_key` (`role_key`, `permission_key`),
+  KEY `idx_user_permission_key` (`is_deleted`)
+ )ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8;
+
+-- 3.0.1 update
+ALTER TABLE `role` ADD `is_relating_to_namespace` TINYINT(4) NOT NULL DEFAULT '0' COMMENT '是否关联域：0，不关联；1，关联';
+ALTER TABLE `user_role` ADD KEY `idx_user_role_u_r_n_n_i` (`user_name`, `role_key`, `namespace`, `need_approval`, `is_deleted`);
+ALTER TABLE `user_role` ADD KEY `idx_user_role_r_n_n_i` (`role_key`, `namespace`, `need_approval`, `is_deleted`);
+ALTER TABLE `user_role` ADD KEY `idx_user_role_n_n_i` (`namespace`, `need_approval`, `is_deleted`);
+ALTER TABLE `user_role` ADD KEY `idx_user_role_n_i` (`need_approval`, `is_deleted`);
+
+-- 3.2.0 update
+ALTER TABLE `job_config` ADD `rerun` tinyint(4) NOT NULL DEFAULT '0' COMMENT '是否重跑标志';
+
+-- 3.3.0 update
+ALTER TABLE `zk_cluster_info` ADD `description` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '集群描述';
+ALTER TABLE `job_config` ADD `up_stream` VARCHAR(1000) NOT NULL DEFAULT '' COMMENT '上游作业';
+ALTER TABLE `job_config` ADD `down_stream` VARCHAR(1000) NOT NULL DEFAULT '' COMMENT '下游作业';
+
+CREATE TABLE `saturn_dashboard_history` (
+  `id` bigint(11) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `zk_cluster` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '所属zk集群',
+  `record_type` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '类型',
+  `topic` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '主题',
+  `content` LONGTEXT NOT NULL COMMENT '内容',
+  `record_date` DATE NOT NULL COMMENT '记录日期',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `index1` (`zk_cluster`, `record_type`, `topic`, `record_date`)
+)ENGINE = InnoDB AUTO_INCREMENT = 1 DEFAULT CHARSET = utf8;
+
+ALTER TABLE `namespace_info` ADD `bus_id` VARCHAR(255) NOT NULL DEFAULT  '' COMMENT '业务组id';

@@ -1,8 +1,10 @@
 package com.vip.saturn.job.internal.sharding;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
+import com.vip.saturn.job.basic.JobScheduler;
+import com.vip.saturn.job.basic.JobType;
+import com.vip.saturn.job.internal.listener.AbstractListenerManager;
+import com.vip.saturn.job.threads.SaturnThreadFactory;
+import com.vip.saturn.job.utils.LogUtils;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.api.CuratorWatcher;
 import org.apache.curator.framework.state.ConnectionState;
@@ -11,11 +13,8 @@ import org.apache.zookeeper.WatchedEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.vip.saturn.job.basic.AbstractSaturnJob;
-import com.vip.saturn.job.basic.CrondJob;
-import com.vip.saturn.job.basic.JobScheduler;
-import com.vip.saturn.job.internal.listener.AbstractListenerManager;
-import com.vip.saturn.job.threads.SaturnThreadFactory;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * 分片监听管理器.
@@ -24,7 +23,7 @@ import com.vip.saturn.job.threads.SaturnThreadFactory;
  *
  */
 public class ShardingListenerManager extends AbstractListenerManager {
-	private static Logger log = LoggerFactory.getLogger(ShardingListenerManager.class);
+	private static final Logger log = LoggerFactory.getLogger(ShardingListenerManager.class);
 
 	private volatile boolean isShutdown;
 
@@ -34,11 +33,14 @@ public class ShardingListenerManager extends AbstractListenerManager {
 
 	private ExecutorService executorService;
 
+	private ConnectionStateListener connectionStateListener;
+
 	public ShardingListenerManager(final JobScheduler jobScheduler) {
 		super(jobScheduler);
 		shardingService = jobScheduler.getShardingService();
-		// because crondJob do nothing in onResharding method, no need this watcher.
-		if (!isCrondJob(jobScheduler.getCurrentConf().getSaturnJobClass())) {
+		// because cron/passive job do nothing in onResharding method, no need this watcher.
+		JobType jobType = jobScheduler.getConfigService().getJobType();
+		if (!jobType.isCron() && !jobType.isPassive()) {
 			necessaryWatcher = new NecessaryWatcher();
 		}
 	}
@@ -49,17 +51,19 @@ public class ShardingListenerManager extends AbstractListenerManager {
 			executorService = Executors.newSingleThreadExecutor(
 					new SaturnThreadFactory(executorName + "-" + jobName + "-registerNecessaryWatcher", false));
 			shardingService.registerNecessaryWatcher(necessaryWatcher);
-			addConnectionStateListener(new ConnectionStateListener() {
+			connectionStateListener = new ConnectionStateListener() {
 				@Override
 				public void stateChanged(CuratorFramework client, ConnectionState newState) {
 					if ((newState == ConnectionState.CONNECTED) || (newState == ConnectionState.RECONNECTED)) {
 						// maybe node data have changed, so doBusiness whatever, it's okay for MSG job
-						log.info("state change to {}, trigger doBusiness and register necessary watcher.", newState);
+						LogUtils.info(log, jobName,
+								"state change to {}, trigger doBusiness and register necessary watcher.", newState);
 						doBusiness();
 						registerNecessaryWatcher();
 					}
 				}
-			});
+			};
+			addConnectionStateListener(connectionStateListener);
 		}
 	}
 
@@ -69,31 +73,10 @@ public class ShardingListenerManager extends AbstractListenerManager {
 		if (executorService != null) {
 			executorService.shutdownNow();
 		}
-		isShutdown = true;
-	}
-
-	/**
-	 * If saturnJobClass is null, then return false; Otherwise, check the superclass canonical name recursively to see
-	 * if is subclass of CronJob
-	 */
-	private boolean isCrondJob(Class<?> saturnJobClass) {
-		if (saturnJobClass != null) {
-			Class<?> superClass = saturnJobClass.getSuperclass();
-			String crondJobCanonicalName = CrondJob.class.getCanonicalName();
-			String abstractSaturnJobCanonicalName = AbstractSaturnJob.class.getCanonicalName();
-			while (superClass != null) {
-				String superClassCanonicalName = superClass.getCanonicalName();
-				if (superClassCanonicalName.equals(crondJobCanonicalName)) {
-					return true;
-				}
-				if (superClassCanonicalName.equals(abstractSaturnJobCanonicalName)) { // AbstractSaturnJob is CrondJob's
-																						// parent
-					return false;
-				}
-				superClass = superClass.getSuperclass();
-			}
+		if (connectionStateListener != null) {
+			removeConnectionStateListener(connectionStateListener);
 		}
-		return false;
+		isShutdown = true;
 	}
 
 	private void registerNecessaryWatcher() {
@@ -121,15 +104,15 @@ public class ShardingListenerManager extends AbstractListenerManager {
 						if (jobScheduler == null || jobScheduler.getJob() == null) {
 							return;
 						}
-						log.info("[{}] msg={} trigger on-resharding", jobName, jobName);
+						LogUtils.info(log, jobName, "{} trigger on-resharding", jobName);
 						jobScheduler.getJob().onResharding();
 					} catch (Throwable t) {
-						log.error("Exception throws during resharding", t);
+						LogUtils.error(log, jobName, "Exception throws during resharding", t);
 					}
 				}
 			});
 		} catch (Throwable t) {
-			log.error("Exception throws during execute thread", t);
+			LogUtils.error(log, jobName, "Exception throws during execute thread", t);
 		}
 	}
 
@@ -137,18 +120,21 @@ public class ShardingListenerManager extends AbstractListenerManager {
 
 		@Override
 		public void process(WatchedEvent event) throws Exception {
+			if (isShutdown) {
+				return;
+			}
 			switch (event.getType()) {
-			case NodeCreated:
-			case NodeDataChanged: // NOSONAR
-				log.info("event type:{}, path:{}", event.getType(), event.getPath());
-				doBusiness();
-			default:
-				// use the thread pool to executor registerNecessaryWatcher by async,
-				// fix the problem:
-				// when zk is reconnected, this watcher thread is earlier than the notice of RECONNECTED EVENT,
-				// registerNecessaryWatcher will wait until reconnected or timeout,
-				// the drawback is that this watcher thread will block the notice of RECONNECTED EVENT.
-				registerNecessaryWatcher();
+				case NodeCreated:
+				case NodeDataChanged: // NOSONAR
+					LogUtils.info(log, jobName, "event type:{}, path:{}", event.getType(), event.getPath());
+					doBusiness();
+				default:
+					// use the thread pool to executor registerNecessaryWatcher by async,
+					// fix the problem:
+					// when zk is reconnected, this watcher thread is earlier than the notice of RECONNECTED EVENT,
+					// registerNecessaryWatcher will wait until reconnected or timeout,
+					// the drawback is that this watcher thread will block the notice of RECONNECTED EVENT.
+					registerNecessaryWatcher();
 			}
 		}
 

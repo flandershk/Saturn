@@ -1,13 +1,7 @@
 package com.vip.saturn.job.reg.zookeeper;
 
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
+import com.vip.saturn.job.threads.SaturnThreadFactory;
+import com.vip.saturn.job.utils.LogUtils;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.recipes.cache.NodeCache;
 import org.apache.curator.framework.recipes.cache.NodeCacheListener;
@@ -17,12 +11,15 @@ import org.apache.curator.utils.CloseableExecutorService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.vip.saturn.job.internal.storage.JobNodePath;
-import com.vip.saturn.job.threads.SaturnThreadFactory;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * @author chembo.huang
- *
  */
 public class ZkCacheManager {
 
@@ -40,7 +37,7 @@ public class ZkCacheManager {
 		this.executorName = executorName;
 		executorService = Executors
 				.newSingleThreadExecutor(new SaturnThreadFactory(executorName + "-" + jobName + "-watcher", false));
-		log.info("ZkCacheManager for executor:{} - job:{} created.", executorName, jobName);
+		LogUtils.info(log, jobName, "ZkCacheManager for executor:{} - job:{} created.", executorName, jobName);
 	}
 
 	public NodeCache buildAndStartNodeCache(String path) {
@@ -50,13 +47,14 @@ public class ZkCacheManager {
 				nc = new NodeCache(client, path);
 				nodeCacheMap.put(path, nc);
 				nc.start();
-				log.info("{} - {} builds nodeCache for path = {}", executorName, jobName, path);
+				LogUtils.info(log, jobName, "{} - {} builds nodeCache for path = {}", executorName, jobName, path);
 			}
 			return nc;
 		} catch (Exception e) {
-			log.error("{} - {}  fails in building nodeCache for path = {}, saturn will not work correctly.",
-					executorName, jobName, path);
-			log.error(e.getMessage(), e);
+			LogUtils.error(log, jobName,
+					"{} - {}  fails in building nodeCache for path = {}, saturn will not work correctly.", executorName,
+					jobName, path);
+			LogUtils.error(log, jobName, e.getMessage(), e);
 		}
 		return null;
 	}
@@ -70,13 +68,15 @@ public class ZkCacheManager {
 						.setExecutor(new CloseableExecutorService(executorService, false)).build();
 				treeCacheMap.put(key, tc);
 				tc.start();
-				log.info("{} - {}  builds treeCache for path = {}, depth = {}", executorName, jobName, path, depth);
+				LogUtils.info(log, jobName, "{} - {}  builds treeCache for path = {}, depth = {}", executorName,
+						jobName, path, depth);
 			}
 			return tc;
 		} catch (Exception e) {
-			log.error("{} - {} fails in building treeCache for path = {}, depth = {}, saturn will not work correctly.",
+			LogUtils.error(log, jobName,
+					"{} - {} fails in building treeCache for path = {}, depth = {}, saturn will not work correctly.",
 					executorName, jobName, path, depth);
-			log.error(e.getMessage(), e);
+			LogUtils.error(log, jobName, e.getMessage(), e);
 		}
 		return null;
 	}
@@ -95,9 +95,10 @@ public class ZkCacheManager {
 			try {
 				tc.close();
 				treeCacheMap.remove(key);
-				log.info("{} - {} closed treeCache, path and depth is {}", executorName, jobName, key);
+				LogUtils.info(log, jobName, "{} - {} closed treeCache, path and depth is {}", executorName, jobName,
+						key);
 			} catch (Exception e) {
-				log.error(e.getMessage(), e);
+				LogUtils.error(log, jobName, e.getMessage(), e);
 			}
 		}
 	}
@@ -111,9 +112,10 @@ public class ZkCacheManager {
 			try {
 				tc.close();
 				iterator.remove();
-				log.info("{} - {} closed treeCache, path and depth is {}", executorName, jobName, path);
+				LogUtils.info(log, jobName, "{} - {} closed treeCache, path and depth is {}", executorName, jobName,
+						path);
 			} catch (Exception e) {
-				log.error(e.getMessage(), e);
+				LogUtils.error(log, jobName, e.getMessage(), e);
 			}
 		}
 	}
@@ -124,9 +126,9 @@ public class ZkCacheManager {
 			try {
 				nc.close();
 				nodeCacheMap.remove(path);
-				log.info("{} - {} closed nodeCache, path is {}", executorName, jobName, path);
+				LogUtils.info(log, jobName, "{} - {} closed nodeCache, path is {}", executorName, jobName, path);
 			} catch (Exception e) {
-				log.error(e.getMessage(), e);
+				LogUtils.error(log, jobName, e.getMessage(), e);
 			}
 		}
 	}
@@ -140,9 +142,9 @@ public class ZkCacheManager {
 			try {
 				nc.close();
 				iterator.remove();
-				log.info("{} - {} closed nodeCache, path is {}", executorName, jobName, path);
+				LogUtils.info(log, jobName, "{} - {} closed nodeCache, path is {}", executorName, jobName, path);
 			} catch (Exception e) {
-				log.error(e.getMessage(), e);
+				LogUtils.error(log, jobName, e.getMessage(), e);
 			}
 		}
 	}
@@ -163,12 +165,11 @@ public class ZkCacheManager {
 	}
 
 	public void shutdown() {
+		// close TreeCache, CloseableExecutorService will be closed, although the pool will not be shutdownNow, but their listeners will accept the interrupt signal
+		// so be careful, such as JobDeleteListener, delete job thread cannot be interrupted
 		closeAllTreeCache();
 		closeAllNodeCache();
 		if (executorService != null && !executorService.isShutdown()) {
-			// Cannot use shutdownNow, because the current thread maybe is running in the pool, and there are codes
-			// after this.
-			// Such as JobDeleteListener
 			executorService.shutdown();
 		}
 	}

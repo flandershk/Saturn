@@ -11,10 +11,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.io.UnsupportedEncodingException;
 import java.util.Map;
 
+import com.vip.saturn.job.console.service.ZkTreeService;
 import org.assertj.core.util.Maps;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
@@ -25,7 +27,7 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import com.alibaba.fastjson.JSONObject;
 import com.vip.saturn.job.console.AbstractSaturnConsoleTest;
-import com.vip.saturn.job.console.controller.AlarmRestApiController;
+import com.vip.saturn.job.console.controller.rest.AlarmRestApiController;
 import com.vip.saturn.job.console.exception.SaturnJobConsoleHttpException;
 import com.vip.saturn.job.console.service.RestApiService;
 import com.vip.saturn.job.integrate.entity.AlarmInfo;
@@ -41,6 +43,9 @@ public class AlarmRestApiControllerTest extends AbstractSaturnConsoleTest {
 
 	@MockBean
 	private RestApiService restApiService;
+
+	@MockBean
+	private ZkTreeService zkTreeService;
 
 	@Test
 	public void testRaiseAlarmSuccessfully() throws Exception {
@@ -65,18 +70,10 @@ public class AlarmRestApiControllerTest extends AbstractSaturnConsoleTest {
 
 	@Test
 	public void testRaiseAlarmFailAsMissingMandatoryField() throws Exception {
-		// missing jobName
-		AlarmEntity alarmEntity = new AlarmEntity(null, "exec", "name", "title", "CRITICAL");
+		// missing executorname
+		AlarmEntity alarmEntity = new AlarmEntity("job1", null, "name", "title", "CRITICAL");
 
 		MvcResult result = mvc.perform(post("/rest/v1/mydomain/alarms/raise").contentType(MediaType.APPLICATION_JSON)
-				.content(alarmEntity.toJSON())).andExpect(status().isBadRequest()).andReturn();
-
-		assertEquals("error message not equal", "Invalid request. Missing parameter: {jobName}",
-				fetchErrorMessage(result));
-		// missing executorname
-		alarmEntity = new AlarmEntity("job1", null, "name", "title", "CRITICAL");
-
-		result = mvc.perform(post("/rest/v1/mydomain/alarms/raise").contentType(MediaType.APPLICATION_JSON)
 				.content(alarmEntity.toJSON())).andExpect(status().isBadRequest()).andReturn();
 
 		assertEquals("error message not equal", "Invalid request. Missing parameter: {executorName}",
@@ -143,10 +140,6 @@ public class AlarmRestApiControllerTest extends AbstractSaturnConsoleTest {
 		assertEquals("message is not equal", expectAlarmInfo.getMessage(), actualAlarmInfo.getMessage());
 		assertEquals("additional info is not equal", expectAlarmInfo.getAdditionalInfo().get("key1"),
 				actualAlarmInfo.getCustomFields().get("key1"));
-	}
-
-	private String fetchErrorMessage(MvcResult result) throws UnsupportedEncodingException {
-		return JSONObject.parseObject(result.getResponse().getContentAsString()).getString("message");
 	}
 
 	public class AlarmEntity {

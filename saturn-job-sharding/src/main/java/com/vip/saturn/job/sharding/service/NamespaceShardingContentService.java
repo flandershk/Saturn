@@ -1,5 +1,6 @@
 package com.vip.saturn.job.sharding.service;
 
+import com.google.common.collect.Maps;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -24,7 +25,10 @@ import com.vip.saturn.job.sharding.node.SaturnExecutorsNode;
  * @author hebelala
  */
 public class NamespaceShardingContentService {
-	static Logger log = LoggerFactory.getLogger(NamespaceShardingContentService.class);
+
+	private static final Logger log = LoggerFactory.getLogger(NamespaceShardingContentService.class);
+
+	private static final int SHARDING_CONTENT_SLICE_LEN = 1024 * 1023;
 
 	private CuratorFramework curatorFramework;
 
@@ -53,13 +57,12 @@ public class NamespaceShardingContentService {
 		String shardingContentStr = toShardingContent(executorList);
 		log.info("Persisit sharding content: {}", shardingContentStr);
 		// 如果内容过大，分开节点存储。不能使用事务提交，因为即使使用事务、写多个节点，但是提交事务时，仍然会报长度过长的错误。
-		int sliceLength = 1024 * 1023; // 每段的最大长度，小于1M。 最大长度见NIOServerCnxn.readLength()
 		byte[] shardingContentBytes = shardingContentStr.getBytes("UTF-8");
 		int length = shardingContentBytes.length;
-		int sliceCount = length / sliceLength + 1;
+		int sliceCount = length / SHARDING_CONTENT_SLICE_LEN + 1;
 		for (int i = 0; i < sliceCount; i++) {
-			int start = sliceLength * i;
-			int end = start + sliceLength;
+			int start = SHARDING_CONTENT_SLICE_LEN * i;
+			int end = start + SHARDING_CONTENT_SLICE_LEN;
 			if (end > length) {
 				end = length;
 			}
@@ -69,19 +72,21 @@ public class NamespaceShardingContentService {
 		}
 	}
 
-	public Map<String, List<Integer>> getShardingItems(List<Executor> executorList, String jobName) throws Exception {
+	public Map<String, List<Integer>> getShardingItems(List<Executor> executorList, String jobName) {
+		if (executorList == null || executorList.isEmpty()) {
+			return Maps.newHashMap();
+		}
+
 		Map<String, List<Integer>> shardingItems = new HashMap<>();
-		if (executorList != null && executorList.size() > 0) {
-			for (Executor tmp : executorList) {
-				if (tmp.getJobNameList() != null && tmp.getJobNameList().contains(jobName)) {
-					List<Integer> items = new ArrayList<>();
-					for (Shard shard : tmp.getShardList()) {
-						if (shard.getJobName().equals(jobName)) {
-							items.add(shard.getItem());
-						}
+		for (Executor tmp : executorList) {
+			if (tmp.getJobNameList() != null && tmp.getJobNameList().contains(jobName)) {
+				List<Integer> items = new ArrayList<>();
+				for (Shard shard : tmp.getShardList()) {
+					if (shard.getJobName().equals(jobName)) {
+						items.add(shard.getItem());
 					}
-					shardingItems.put(tmp.getExecutorName(), items);
 				}
+				shardingItems.put(tmp.getExecutorName(), items);
 			}
 		}
 		return shardingItems;
@@ -108,8 +113,8 @@ public class NamespaceShardingContentService {
 			Collections.sort(elementNodes, new Comparator<String>() {
 				@Override
 				public int compare(String arg0, String arg1) {
-					Integer a = Integer.parseInt(arg0);
-					Integer b = Integer.parseInt(arg1);
+					Integer a = Integer.valueOf(arg0);
+					Integer b = Integer.valueOf(arg1);
 					return a.compareTo(b);
 				}
 			});
@@ -118,7 +123,7 @@ public class NamespaceShardingContentService {
 				byte[] elementData = curatorFramework.getData()
 						.forPath(SaturnExecutorsNode.getShardingContentElementNodePath(elementNode));
 				for (int i = 0; i < elementData.length; i++) {
-					dataByteList.add(elementData[i]);// NOSONAR
+					dataByteList.add(elementData[i]);
 				}
 			}
 			byte[] dataArray = new byte[dataByteList.size()];
@@ -152,6 +157,7 @@ public class NamespaceShardingContentService {
 				Map<String, List<Integer>> shardContent = next.getValue();
 				String shardContentJson = gson.toJson(shardContent);
 				byte[] necessaryContent = shardContentJson.getBytes("UTF-8");
+				// 更新$Jobs/xx/leader/sharding/neccessary 节点的内容为新分配的sharding 内容
 				String jobLeaderShardingNodePath = SaturnExecutorsNode.getJobLeaderShardingNodePath(jobName);
 				String jobLeaderShardingNecessaryNodePath = SaturnExecutorsNode
 						.getJobLeaderShardingNecessaryNodePath(jobName);

@@ -1,29 +1,24 @@
-/**
- * 
- */
 package com.vip.saturn.job.trigger;
-
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
-
-import org.quartz.SchedulerException;
-import org.quartz.Trigger;
 
 import com.vip.saturn.job.basic.AbstractElasticJob;
 
+import java.util.Date;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+
 /**
  * @author chembo.huang
- *
  */
 public class SaturnScheduler {
 
-	private static final String SATURN_QUARTZ_WORKER = "-saturnQuartz-worker";
+	private static final String SATURN_QUARTZ_WORKER = "-saturnWorker";
 	private final AbstractElasticJob job;
 
 	private Trigger trigger;
 	private final ExecutorService executor;
-	private SaturnWorker saturnQuartzWorker;
+	private SaturnWorker saturnWorker;
 
 	public SaturnScheduler(final AbstractElasticJob job, final Trigger trigger) {
 		this.job = job;
@@ -45,9 +40,12 @@ public class SaturnScheduler {
 		});
 	}
 
-	public void start() throws SchedulerException {
-		saturnQuartzWorker = new SaturnWorker(job, trigger);
-		executor.submit(saturnQuartzWorker);
+	public void start() {
+		saturnWorker = new SaturnWorker(job, trigger.createTriggered(false, null), trigger.createQuartzTrigger());
+		if (trigger.isInitialTriggered()) {
+			trigger(null);
+		}
+		executor.submit(saturnWorker);
 	}
 
 	public Trigger getTrigger() {
@@ -55,20 +53,35 @@ public class SaturnScheduler {
 	}
 
 	public void shutdown() {
-		saturnQuartzWorker.halt();
+		saturnWorker.halt();
 		executor.shutdown();
 	}
 
-	public void triggerJob() {
-		saturnQuartzWorker.trigger();
+	public boolean isTerminated() {
+		return executor.isTerminated();
+	}
+
+	public void awaitTermination(long timeout) {
+		try {
+			executor.awaitTermination(timeout, TimeUnit.MILLISECONDS);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+		}
+	}
+
+	public void trigger(String triggeredDataStr) {
+		saturnWorker.trigger(trigger.createTriggered(true, triggeredDataStr));
 	}
 
 	public boolean isShutdown() {
-		return saturnQuartzWorker.isShutDown();
+		return saturnWorker.isShutDown();
 	}
 
-	public void rescheduleJob(Trigger createTrigger) throws SchedulerException {
-		this.trigger = createTrigger;
-		saturnQuartzWorker.reInitTrigger(createTrigger);
+	public void reInitializeTrigger() {
+		saturnWorker.reInitTrigger(trigger.createQuartzTrigger());
+	}
+
+	public Date getNextFireTimePausePeriodEffected() {
+		return saturnWorker.getNextFireTimePausePeriodEffected();
 	}
 }
